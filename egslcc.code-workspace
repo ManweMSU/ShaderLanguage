@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"*.hlsl": "hlsl",
+			"system_error": "cpp",
+			"xlocale": "cpp"
+		}
+	}
+}

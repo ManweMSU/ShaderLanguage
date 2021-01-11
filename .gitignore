@@ -30,3 +30,9 @@
 *.exe
 *.out
 *.app
+
+# ERT
+_build
+.vscode
+*.egso
+*.hlsl

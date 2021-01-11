@@ -1,0 +1,60 @@
+
+struct kornevgen {
+    float4x4 pidor;
+    int3 blbl [5];
+    uint a, b;
+    float4 normal;
+    int4 index;
+    float2 color;
+}
+struct test {
+    float4 color;
+    float4 texcoord;
+}
+
+vertex FUNCTION (
+    in uint vid : vertex,
+    in texture tex : texture[0],
+    in sampler sampl : sampler[0],
+    out float4 pos : position,
+    out test test_struct
+) {
+    pos.x = 5;
+    pos.y = 1.0;
+    pos.z = 33;
+    pos.w = -5;
+
+    int4 v = asint(pos);
+    uint4 v2 = asuint(pos);
+    float4 v3 = asfloat(v);
+    float v4 = clamp(2, 3, 4);
+
+    v3.xy = float2(1, 2);
+    //v3.xyz = max(pos.yzw, 1);
+    v3.x = distance(float2(1, 2), 5);
+
+    float3x3 m;
+    float w1 = det(m);
+
+    v3 = 5 * pos;
+
+    float2x3 A;
+    float3x4 B;
+    float2x4 i = mul(A, B);
+
+    float3x2 C = transpose(A);
+
+   // float2 bb = step(pos.xy, 0);
+
+    sincos(1.0, v3.x, v3.y);
+
+    test_struct.color = test_struct.texcoord = pos;
+}
+pixel PixelShader (
+    in test test_struct,
+    in texture tex : texture[0],
+    in sampler sampl : sampler[0],
+    out float4 color : color[0]
+) {
+    color = sample(tex, sampl, float2(0.5, 0.5));
+}

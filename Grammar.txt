@@ -1,0 +1,46 @@
+STYPE -> ( 'bool' | 'int' | 'uint' | 'float' ) [ M [ 'x' N ] ]
+DIM   -> '1' | '2' | '3' | 'cube'
+TXARG -> DIM | STYPE
+RTYPE -> 'sampler' | 'array' '<' TYPE '>' | 'texture' [ 'array' ] [ '<' TXARG { ',' TXARG } '>' ]
+SMRN  -> 'vertex' | 'instance' | 'position' | 'front' | 'color' | 'depth' | 'stencil' | 'texture' | 'constant' | 'buffer' | 'sampler'
+SMR   -> SMRN [ '[' INDEX ']' ]
+INTM  -> 'linear' | 'nointerpolation' | 'noperspective'
+SFLD  -> [ INTM ] STYPE IDENTIFIER [ '[' INDEX ']' | ',' { IDENTIFIER } ] ';'
+SDEF  -> 'struct' IDENTIFIER '{' { SFLD ';' } '}'
+TYPE  -> STYPE | RTYPE | STRUCT_TYPE
+SARG  -> ( 'in' | 'out' ) TYPE IDENTIFIER [ ':' SMR ]
+O9    -> '.' IDENTIFIER                // for structs and vector types
+	     '[' EXPR { ',' EXPR } ']'     // for any arrays, texture, vector and matrix types
+	     '(' [ EXPR { ',' EXPR } ] ')' // for intrinsic functions
+         '++' | '--'                   // for 
+O8    -> ( '(' EXPR ')' | CONST | VAR | FUNC ) { O9 }
+S8    -> '+' | '-' | '!' | '~'
+O7    -> O8 | S8 O7
+S7    -> '*' | '/' | '%' | '&'
+O6    -> O7 { S7 O7 }
+S6    -> '+' | '-' | '|' | '^' | '<<' | '>>'
+O5    -> O6 { S6 O6 }
+S5    -> '==' | '!=' | '<' | '>' | '<=' | '>='
+O4    -> O5 { S5 O5 }
+S4    -> '&&'
+O3    -> O4 { S4 O4 }
+S3    -> '||'
+O2    -> O3 { S3 O3 }
+O1    -> O2 '?' O2 ':' O2
+S1    -> '=' | '+=' | '-=' | '*=' | '/=' | '%=' | '&=' | '|=' | '^=' | '<<=' | '>>='
+EXPR  -> O1 [ S1 EXPR ]
+AQUAL -> '[' INDEX ']'
+AINIT -> '{' EXPR { ',' EXPR } '}'
+VEXPR -> EXPR | ( ( STYPE | STRUCT_TYPE ) IDENTIFIER [ AQUAL ] [ '=' ( EXPR | AINIT ) ] { ',' IDENTIFIER [ AQUAL ] [ '=' ( EXPR | AINIT ) ] } )
+IF    -> 'if' '(' EXPR ')' STATE
+FOR   -> 'for' '(' VEXPR ';' EXPR ';' EXPR ')' STATE
+WHILE -> 'while' '(' EXPR ')' STATE
+DO    -> 'do' STATE 'while' '(' EXPR ')' ';'
+RET   -> 'return' ';'
+BREAK -> 'break' ';'
+CONT  -> 'continue' ';'
+DISC  -> 'discard' ';'
+STATE -> VEXPR ';' | RET | IF | FOR | WHILE | DO | CONT | BREAK | DISC | BLOCK | ';'
+BLOCK -> '{' { STATE } '}'
+SDRF  -> ( 'pixel' | 'vertex' ) IDENTIFIER '(' SARG { ',' SARG } ')' BLOCK
+EGSL* -> { SDEF | SDRF }
