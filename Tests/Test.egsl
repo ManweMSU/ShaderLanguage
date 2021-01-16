@@ -42,19 +42,44 @@ vertex FUNCTION (
     float3x4 B;
     float2x4 i = mul(A, B);
 
+    B = cos(B);
+
     float3x2 C = transpose(A);
 
-   // float2 bb = step(pos.xy, 0);
+    float2 bb = step(pos.xy, 0);
 
-    sincos(1.0, v3.x, v3.y);
+    sincos(v3, v3, pos);
 
     test_struct.color = test_struct.texcoord = pos;
 }
 pixel PixelShader (
     in test test_struct,
-    in texture tex : texture[0],
+
+    in texture<1, float4> tex0 : texture[0],
+    in texture<2, float4> tex1 : texture[1],
+    in texture<cube, float4> tex2 : texture[2],
+    in texture<3, float4> tex3 : texture[3],
+    in texture array<1, float4> tex4 : texture[4],
+    in texture array<2, float4> tex5 : texture[5],
+    in texture array<cube, float4> tex6 : texture[6],
+    in texture<2, float2> tex7 : texture[7],
+
     in sampler sampl : sampler[0],
     out float4 color : color[0]
 ) {
-    color = sample(tex, sampl, float2(0.5, 0.5));
+    color = sample(tex0, sampl, 0.1);
+    color = sample(tex1, sampl, float2(0.5, 0.5));
+    color = sample(tex2, sampl, float3(0.5, 0.5, 0.8));
+    color = sample(tex3, sampl, float3(0.5, 0.5, 0.7));
+    color = sample(tex4, sampl, float2(0.2, 0.3));
+    color = sample(tex5, sampl, float3(0.2, 0.3, 0.4));
+    color = sample(tex6, sampl, float4(0.2, 0.3, 0.4, 0.5));
+    color.xy = sample(tex7, sampl, float2(0.5, 0.5));
+    color = sample(tex0, sampl, 0.1, 3);
+    color = sample(tex1, sampl, float2(0.5, 0.5), 3);
+    color = sample(tex2, sampl, float3(0.5, 0.5, 0.8), 3);
+    color = sample(tex3, sampl, float3(0.5, 0.5, 0.7), 3);
+    color = sample(tex4, sampl, float2(0.2, 0.3), 3);
+    color = sample(tex5, sampl, float3(0.2, 0.3, 0.4), 3);
+    color = sample(tex6, sampl, float4(0.2, 0.3, 0.4, 0.5), 3);
 }

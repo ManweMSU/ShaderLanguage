@@ -50,6 +50,7 @@ namespace Engine
 			bool CheckTypecastNothrow(ValueDescriptor from, ValueDescriptor to);
 			void CheckTypecast(ValueDescriptor from, int to);
 			void CheckIdentity(ValueDescriptor from, ValueDescriptor to);
+			void CheckMetalSIMD(ValueDescriptor value_for, const string & func);
 			void SetReturnValue(LanguageType * type, bool assignable = false);
 			int GetFunctionPosition(void);
 			int GetCurrentPosition(void);

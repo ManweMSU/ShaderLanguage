@@ -3,6 +3,7 @@
 #include "Core.h"
 #include "Parser.h"
 #include "CompileDX.h"
+#include "CompileMetal.h"
 
 using namespace Engine;
 using namespace Engine::Streaming;
@@ -14,7 +15,7 @@ EGSL::OutputTarget GetPlatformDefaultTarget(void)
 	return EGSL::OutputTarget::Direct3D11;
 	#endif
 	#ifdef ENGINE_MACOSX
-	return OutputTarget::Metal;
+	return EGSL::OutputTarget::Metal;
 	#endif
 	return EGSL::OutputTarget::Unknown;
 }
@@ -110,7 +111,13 @@ int Main(void)
 			try {
 				FileStream input_stream(state.input, AccessRead, OpenExisting);
 				TextReader reader(&input_stream);
-				chars = reader.ReadAll();
+				DynamicString buffer;
+				while (!reader.EofReached()) {
+					auto line = reader.ReadLine();
+					if (line.Length() > 1 && line[0] == L'#' && line[1] == L'#') buffer << L"\n";
+					else buffer << line << L"\n";
+				}
+				chars = buffer.ToString();
 			} catch (IO::FileAccessException & e) {
 				if (!state.silent) console << TextColor(Console::ColorRed) <<
 					FormatString(L"Failed to load the input file: file system error %0.", string(e.code, HexadecimalBase, 4)) << TextColorDefault() << LineFeed();
@@ -163,6 +170,9 @@ int Main(void)
 				}
 				return 1;
 			}
+			for (auto & h : context.hints) {
+				console << TextColor(Console::ColorYellow) << L"Warning: " << TextColorDefault() << h << L"." << LineFeed();
+			}
 			if (state.output_target == EGSL::OutputTarget::Direct3D11) {
 				for (auto & shader : context.Shaders) {
 					DynamicString code;
@@ -176,10 +186,12 @@ int Main(void)
 							console.Write(error_log.ToString());
 							console.SetTextColor(Console::ColorDefault);
 						}
-					} else if (!state.silent) {
-						console.SetTextColor(Console::ColorRed);
-						console.Write(error_log.ToString());
-						console.SetTextColor(Console::ColorDefault);
+					} else {
+						if (!state.silent) {
+							console.SetTextColor(Console::ColorRed);
+							console.Write(error_log.ToString());
+							console.SetTextColor(Console::ColorDefault);
+						}
 						if (state.output_form != EGSL::OutputForm::Source) return 1;
 					}
 					if (state.output_form == EGSL::OutputForm::Source) {
@@ -209,8 +221,51 @@ int Main(void)
 					output_raw->Seek(0, Begin);
 					output_raw->CopyTo(&output);
 				}
+			} else if (state.output_target == EGSL::OutputTarget::Metal) {
+				DynamicString code;
+				code << L"#include <metal_stdlib>\n";
+				code << L"#include <simd/simd.h>\n\n";
+				code << L"using namespace metal;\n\n";
+				for (auto & str : context.StructureTypes) code << EGSL::MakeMslCodeForStructure(&str);
+				for (auto & shader : context.Shaders) code << shader.Code;
+				if (state.output_form == EGSL::OutputForm::Source) {
+					DynamicString error_log;
+					auto status = EGSL::CompileMSL(code, L"", error_log);
+					if (status) {
+						if (!state.silent) {
+							console.SetTextColor(Console::ColorYellow);
+							console.Write(error_log.ToString());
+							console.SetTextColor(Console::ColorDefault);
+						}
+					} else if (!state.silent) {
+						console.SetTextColor(Console::ColorRed);
+						console.Write(error_log.ToString());
+						console.SetTextColor(Console::ColorDefault);
+					}
+					FileStream stream(state.output + L".metal", AccessWrite, CreateAlways);
+					TextWriter writer(&stream, Encoding::ANSI);
+					writer.Write(code);
+					return 0;
+				}
+				DynamicString error_log;
+				auto status = EGSL::CompileMSL(code, state.output + L".egso", error_log);
+				if (status) {
+					if (!state.silent) {
+						console.SetTextColor(Console::ColorYellow);
+						console.Write(error_log.ToString());
+						console.SetTextColor(Console::ColorDefault);
+					}
+				} else {
+					if (!state.silent) {
+						console.SetTextColor(Console::ColorRed);
+						console.Write(error_log.ToString());
+						console.SetTextColor(Console::ColorDefault);
+					}
+					return 1;
+				}
 			} else {
-				// TODO: IMPLEMENT METAL TRANSLATION
+				if (!state.silent) console << TextColor(Console::ColorRed) << L"Internal error: unknown target interface." << TextColorDefault() << LineFeed();
+				return 1;
 			}
 		} else if (!state.silent) {
 			console << ENGINE_VI_APPNAME << LineFeed();

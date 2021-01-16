@@ -250,6 +250,12 @@ namespace Engine
 			auto field_type = ReadTypeDefinition(text, cp, context);
 			if (field_type->GetClass() != TypeClass::Simple)
 				throw CompilationException(CompilationError::InappropriateType, tp, L"Structure field type must be a scalar, a vector or a matrix type");
+			if (context.Target == OutputTarget::Metal) {
+				auto sim = static_cast<SimpleType *>(field_type);
+				if (sim->Class == SimpleTypeClass::Matrix && sim->Domain != SimpleTypeDomain::Float) {
+					throw CompilationException(CompilationError::InappropriateType, tp, L"MSL translation supports 'float' matricies only");
+				}
+			}
 			if (text[cp].Class != TokenClass::Identifier) throw CompilationException(CompilationError::AnotherTokenExpected, cp, L"An identifier expected");
 			auto field_name = text[cp].Content;
 			for (auto & fn : type.FieldNames) if (fn == field_name)
@@ -301,6 +307,7 @@ namespace Engine
 		{
 			if (text[cp].Class != TokenClass::Identifier) throw CompilationException(CompilationError::AnotherTokenExpected, cp, L"An identifier expected");
 			SafePointer<StructureType> type = new StructureType;
+			type->IsExternal = false;
 			type->Name = text[cp].Content;
 			type->TranslateName = L"egsl_type_" + type->Name;
 			for (auto & s : context.StructureTypes) if (s.Name == type->Name)
@@ -475,6 +482,10 @@ namespace Engine
 			if (arg.Type->GetClass() != TypeClass::Structure) {
 				if (arg.Semantic.Semantic == SemanticClass::NoSemantic)
 					throw CompilationException(CompilationError::InvalidShaderArgumentSemantic, tp, L"Non-structure argument must have a semantic or be attached to a register");
+				if (arg.Type->GetClass() == TypeClass::Register && static_cast<RegisterType *>(arg.Type.Inner())->InnerType &&
+					static_cast<RegisterType *>(arg.Type.Inner())->InnerType->GetClass() == TypeClass::Structure) {
+					static_cast<StructureType *>(static_cast<RegisterType *>(arg.Type.Inner())->InnerType.Inner())->IsExternal = true;
+				}
 			} else {
 				if (arg.Semantic.Semantic == SemanticClass::NoSemantic) {
 					auto str = static_cast<StructureType *>(arg.Type.Inner());
@@ -487,7 +498,7 @@ namespace Engine
 						if (arg.Usage != ShaderArgumentUsage::Input)
 							throw CompilationException(CompilationError::InvalidShaderArgumentSemantic, tp, L"A structure argument without a register must be an input to a pixel shader");
 					}
-				}
+				} else static_cast<StructureType *>(arg.Type.Inner())->IsExternal = true;
 			}
 			scontext.Arguments.Append(arg);
 		}
@@ -514,7 +525,31 @@ namespace Engine
 			if (!ret_present) throw CompilationException(CompilationError::SemanticMissing, sp,
 				L"Shader must return a value (use 'position' or 'color' semantics)");
 		}
-		
+
+		void CheckMetalArithmeticLimitations(CompilerCommonContext & context, LanguageType * type1, LanguageType * type2, const string & op, int at)
+		{
+			SimpleType * s1 = (type1->GetClass() == TypeClass::Simple) ? static_cast<SimpleType *>(type1) : 0;
+			SimpleType * s2 = (type1->GetClass() == TypeClass::Simple) ? static_cast<SimpleType *>(type2) : 0;
+			if (s1 && s2 && (s1->Class == SimpleTypeClass::Matrix || s2->Class == SimpleTypeClass::Matrix)) {
+				if (op != L"+" && op != L"-" && op != "*") {
+					string text = FormatString(L"SIMD '%0' is not available for matricies in MSL", op);
+					if (context.Target == OutputTarget::Metal) {
+						throw CompilationException(CompilationError::OperatorIsNotApplicable, at, text);
+					} else context.hints.Append(text);
+				}
+				if (op == L"*") {
+					bool ms = false;
+					if (s1->Class == SimpleTypeClass::Matrix && s2->Class == SimpleTypeClass::Scalar) ms = true;
+					else if (s2->Class == SimpleTypeClass::Matrix && s1->Class == SimpleTypeClass::Scalar) ms = true;
+					if (!ms) {
+						string text = FormatString(L"Operator '*' in MSL takes only matrix-scalar arguments", op);
+						if (context.Target == OutputTarget::Metal) {
+							throw CompilationException(CompilationError::OperatorIsNotApplicable, at, text);
+						} else context.hints.Append(text);
+					}
+				}
+			}
+		}
 		void CheckArithmeticOperation(LanguageType * type, const string & op, int at)
 		{
 			if (type->GetClass() != TypeClass::Simple)
@@ -737,6 +772,8 @@ namespace Engine
 							else if (field[i] == L'g' && sdim > 1) field_norm << L'y';
 							else if (field[i] == L'b' && sdim > 2) field_norm << L'z';
 							else if (field[i] == L'a' && sdim > 3) field_norm << L'w';
+							else if (field[i] == L'u') field_norm << L'x';
+							else if (field[i] == L'v' && sdim > 1) field_norm << L'y';
 							else throw CompilationException(CompilationError::UnknownIdentifier, cp, L"Unknown field identifier");
 						}
 						bool duplicate = false;
@@ -794,7 +831,19 @@ namespace Engine
 						auto val = TranslateExpression(text, cp, context, scontext, &req);
 						root.IsAssignable = false;
 						root.Type = type->InnerType;
-						out << L".Load(" << val << L")";
+						if (context.Target == OutputTarget::Metal) {
+							if (type->Dimensions == 0) out << L".read(uint(" << val << L".x), 0)";
+							else if (type->Dimensions == 1) out << L".read(uint2(" << val << L".xy), uint(" << val << L".z))";
+							else if (type->Dimensions == 3) out << L".read(uint3(" << val << L".xyz), uint(" << val << L".w))";
+							else if (type->Dimensions == 4) out << L".read(uint(" << val << L".x), uint(" << val << L".y), 0)";
+							else if (type->Dimensions == 5) out << L".read(uint2(" << val << L".xy), uint(" << val << L".z), uint(" << val << L".w))";
+							auto sim = static_cast<SimpleType *>(type->InnerType.Inner());
+							if (sim->Class == SimpleTypeClass::Scalar) out << L".x";
+							else if (sim->Class == SimpleTypeClass::Vector && sim->Columns == 2) out << L".xy";
+							else if (sim->Class == SimpleTypeClass::Vector && sim->Columns == 3) out << L".xyz";
+						} else {
+							out << L".Load(" << val << L")";
+						}
 					} else if (root.Type->GetClass() == TypeClass::Simple && static_cast<SimpleType *>(root.Type)->Class == SimpleTypeClass::Matrix) {
 						auto type = static_cast<SimpleType *>(root.Type);
 						ValueDescriptor req;
@@ -831,6 +880,7 @@ namespace Engine
 					if (!root.IsAssignable) throw CompilationException(CompilationError::ExpressionIsNotAssignable, cp, L"");
 					if (root.ArraySize) throw CompilationException(CompilationError::OperatorIsNotApplicable, cp, L"Arithmetic is not supported on arrays");
 					CheckArithmeticOperation(root.Type, text[cp].Content, cp);
+					CheckMetalArithmeticLimitations(context, root.Type, root.Type, L"++", cp);
 					cp++;
 					out << L"++";
 					root.IsAssignable = false;
@@ -838,6 +888,7 @@ namespace Engine
 					if (!root.IsAssignable) throw CompilationException(CompilationError::ExpressionIsNotAssignable, cp, L"");
 					if (root.ArraySize) throw CompilationException(CompilationError::OperatorIsNotApplicable, cp, L"Arithmetic is not supported on arrays");
 					CheckArithmeticOperation(root.Type, text[cp].Content, cp);
+					CheckMetalArithmeticLimitations(context, root.Type, root.Type, L"--", cp);
 					cp++;
 					out << L"--";
 					root.IsAssignable = false;
@@ -855,6 +906,7 @@ namespace Engine
 				cp++;
 				ValueDescriptor desc;
 				auto val = TranslateUnaryLevel(text, cp, context, scontext, &desc);
+				CheckMetalArithmeticLimitations(context, desc.Type, desc.Type, o, op);
 				if (desc.ArraySize) throw CompilationException(CompilationError::OperatorIsNotApplicable, op, L"Arithmetic is not supported on arrays");
 				CheckArithmeticOperation(desc.Type, o, op);
 				desc.IsAssignable = false;
@@ -887,6 +939,7 @@ namespace Engine
 				val += L" " + o + L" (" + with + L")";
 				if (left.ArraySize || right.ArraySize)
 					throw CompilationException(CompilationError::OperatorIsNotApplicable, op, L"Arithmetic is not supported on arrays");
+				CheckMetalArithmeticLimitations(context, left.Type, right.Type, o, op);
 				CheckArithmeticOperation(left.Type, o, op);
 				ValueDescriptor common;
 				CheckSymmetricAutocast(left, right, &common, op);
@@ -914,6 +967,7 @@ namespace Engine
 				val += L" " + o + L" (" + with + L")";
 				if (left.ArraySize || right.ArraySize)
 					throw CompilationException(CompilationError::OperatorIsNotApplicable, op, L"Arithmetic is not supported on arrays");
+				CheckMetalArithmeticLimitations(context, left.Type, right.Type, o, op);
 				CheckArithmeticOperation(left.Type, o, op);
 				ValueDescriptor common;
 				CheckSymmetricAutocast(left, right, &common, op);
@@ -943,6 +997,7 @@ namespace Engine
 					throw CompilationException(CompilationError::OperatorIsNotApplicable, op, L"Comparison is not supported on arrays");
 				if (left.Type->GetClass() != TypeClass::Simple || right.Type->GetClass() != TypeClass::Simple)
 					throw CompilationException(CompilationError::OperatorIsNotApplicable, op, L"Comparison is only supported on scalars, vectors and matricies");
+				CheckMetalArithmeticLimitations(context, left.Type, right.Type, o, op);
 				auto sl = static_cast<SimpleType *>(left.Type);
 				auto sr = static_cast<SimpleType *>(right.Type);
 				if (sl->Class != sr->Class || sl->Columns != sr->Columns || sl->Rows != sr->Rows)
@@ -973,6 +1028,7 @@ namespace Engine
 					throw CompilationException(CompilationError::OperatorIsNotApplicable, op, L"Logical 'and' is not supported on arrays");
 				if (left.Type->GetClass() != TypeClass::Simple || right.Type->GetClass() != TypeClass::Simple)
 					throw CompilationException(CompilationError::OperatorIsNotApplicable, op, L"Logical 'and' is only supported on scalars, vectors and matricies");
+				CheckMetalArithmeticLimitations(context, left.Type, right.Type, L"&&", op);
 				auto sl = static_cast<SimpleType *>(left.Type);
 				auto sr = static_cast<SimpleType *>(right.Type);
 				if (sl->Class != sr->Class || sl->Columns != sr->Columns || sl->Rows != sr->Rows)
@@ -1003,6 +1059,7 @@ namespace Engine
 					throw CompilationException(CompilationError::OperatorIsNotApplicable, op, L"Logical 'or' is not supported on arrays");
 				if (left.Type->GetClass() != TypeClass::Simple || right.Type->GetClass() != TypeClass::Simple)
 					throw CompilationException(CompilationError::OperatorIsNotApplicable, op, L"Logical 'or' is only supported on scalars, vectors and matricies");
+				CheckMetalArithmeticLimitations(context, left.Type, right.Type, L"||", op);
 				auto sl = static_cast<SimpleType *>(left.Type);
 				auto sr = static_cast<SimpleType *>(right.Type);
 				if (sl->Class != sr->Class || sl->Columns != sr->Columns || sl->Rows != sr->Rows)
@@ -1055,6 +1112,7 @@ namespace Engine
 					text[cp].Content == L"*=" || text[cp].Content == L"/=" || text[cp].Content == L"%=" ||
 					text[cp].Content == L"&=" || text[cp].Content == L"|=" || text[cp].Content == L"^=" ||
 					text[cp].Content == L"<<=" || text[cp].Content == L">>=") {
+					auto sp = cp;
 					if (!left.IsAssignable) throw CompilationException(CompilationError::ExpressionIsNotAssignable, xs, L"");
 					if (text[cp].Content == L"=") {
 						if (left.Type->GetClass() == TypeClass::Register)
@@ -1070,6 +1128,7 @@ namespace Engine
 					right.IsAssignable = false;
 					right.ArraySize = left.ArraySize;
 					auto arg = TranslateExpression(text, cp, context, scontext, &right);
+					if (text[sp].Content != L"=") CheckMetalArithmeticLimitations(context, left.Type, right.Type, text[sp].Content.Fragment(0, text[sp].Content.Length() - 1), sp);
 					out << L" " << op << L" " << arg;
 				}
 			}
@@ -1150,6 +1209,12 @@ namespace Engine
 			LanguageType * decl_var_type = 0;
 			if (text[cp].Class == TokenClass::Keyword || text[cp].Class == TokenClass::Identifier) decl_var_type = FindType(text[cp].Content, context);
 			if (decl_var_type) {
+				if (context.Target == OutputTarget::Metal && decl_var_type->GetClass() == TypeClass::Simple) {
+					auto sim = static_cast<SimpleType *>(decl_var_type);
+					if (sim->Class == SimpleTypeClass::Matrix && sim->Domain != SimpleTypeDomain::Float) {
+						throw CompilationException(CompilationError::InappropriateType, cp, L"MSL translation supports 'float' matricies only");
+					}
+				}
 				cp++;
 				string type_name;
 				if (decl_var_type->GetClass() == TypeClass::Simple) type_name = static_cast<SimpleType *>(decl_var_type)->Name;
@@ -1170,7 +1235,8 @@ namespace Engine
 			if (text[cp].Class != TokenClass::CharCombo || text[cp].Content != L";")
 				throw CompilationException(CompilationError::AnotherTokenExpected, cp, L"';' expected");
 			cp++;
-			return L"return;";
+			if (context.Target == OutputTarget::Metal) return L"return egsl_retval;";
+			else return L"return;";
 		}
 		string TranslateContinue(const Array<Syntax::Token> & text, int & cp, CompilerCommonContext & context, CompilerShaderContext & scontext)
 		{
@@ -1200,7 +1266,8 @@ namespace Engine
 			if (text[cp].Class != TokenClass::CharCombo || text[cp].Content != L";")
 				throw CompilationException(CompilationError::AnotherTokenExpected, cp, L"';' expected");
 			cp++;
-			return L"discard;";
+			if (context.Target == OutputTarget::Metal) return L"discard_fragment();";
+			else return L"discard;";
 		}
 		void TranslateBlock(const Array<Syntax::Token> & text, int & cp, CompilerCommonContext & context, CompilerShaderContext & scontext, DynamicString & out, const string & ident);
 		void TranslateStatement(const Array<Syntax::Token> & text, int & cp, CompilerCommonContext & context, CompilerShaderContext & scontext, DynamicString & out, const string & ident);
@@ -1360,12 +1427,27 @@ namespace Engine
 			if (text[cp].Class != TokenClass::CharCombo || text[cp].Content != L"(")
 				throw CompilationException(CompilationError::AnotherTokenExpected, cp, L"'(' expected");
 			ParseShaderArguments(text, cp, context, scontext);
-			shader.Code = MakeHlslCodeForShaderSignature(scontext);
-			shader.Code += L"{\n\t";
+			if (context.Target == OutputTarget::Direct3D11) {
+				shader.Code = MakeHlslCodeForShaderSignature(scontext);
+				shader.Code += L"{\n\t";
+			} else if (context.Target == OutputTarget::Metal) {
+				string msl_rvt;
+				shader.Code = MakeMslCodeForShaderSignature(scontext, msl_rvt);
+				shader.Code += L"{\n\t";
+				shader.Code += msl_rvt;
+				shader.Code += L" egsl_retval;\n\t";
+			}
 			DynamicString translated;
 			TranslateBlock(text, cp, context, scontext, translated, L"\t");
-			shader.Code += translated;
-			shader.Code += L"\n}\n";
+			if (context.Target == OutputTarget::Direct3D11) {
+				shader.Code += translated;
+				shader.Code += L"\n}\n";
+			} else if (context.Target == OutputTarget::Metal) {
+				shader.Code += translated;
+				shader.Code += L"\n\t";
+				shader.Code += L"return egsl_retval;";
+				shader.Code += L"\n}\n";
+			}
 			context.Shaders.Append(shader);
 		}
 		void TranslateCode(const Array<Syntax::Token> & text, CompilerCommonContext & context)
@@ -1385,6 +1467,7 @@ namespace Engine
 				} else throw CompilationException(CompilationError::AnotherTokenExpected, cp, L"'pixel', 'vertex' or 'struct' keyword expected");
 			}
 		}
+		
 		string MakeHlslCodeForStructure(StructureType * type)
 		{
 			DynamicString result;
@@ -1429,20 +1512,20 @@ namespace Engine
 					} else if (reg->Dimensions == 6) {
 						result << L"TextureCubeArray<" << static_cast<SimpleType *>(reg->InnerType.Inner())->Name << L"> ";
 					}
-					result << a.TranslateName << L" : register(t" << string(a.Semantic.Index) << L");\n";
+					result << a.TranslateName << L" : register(t[" << string(a.Semantic.Index) << L"]);\n";
 				} else if (a.Semantic.Semantic == SemanticClass::Buffer) {
 					auto reg = static_cast<RegisterType *>(a.Type.Inner());
 					string element;
 					if (reg->InnerType->GetClass() == TypeClass::Simple) element = static_cast<SimpleType *>(reg->InnerType.Inner())->Name;
 					else if (reg->InnerType->GetClass() == TypeClass::Structure) element = static_cast<StructureType *>(reg->InnerType.Inner())->TranslateName;
-					result << L"StructuredBuffer<" << element << L"> " << a.TranslateName << L" : register(t" << string(a.Semantic.Index) << L");\n";
+					result << L"StructuredBuffer<" << element << L"> " << a.TranslateName << L" : register(t[" << string(a.Semantic.Index) << L"]);\n";
 				} else if (a.Semantic.Semantic == SemanticClass::Sampler) {
-					result << L"SamplerState " << a.TranslateName << L" : register(s" << string(a.Semantic.Index) << L");\n";
+					result << L"SamplerState " << a.TranslateName << L" : register(s[" << string(a.Semantic.Index) << L"]);\n";
 				} else if (a.Semantic.Semantic == SemanticClass::Constant) {
 					string element;
 					if (a.Type->GetClass() == TypeClass::Simple) element = static_cast<SimpleType *>(a.Type.Inner())->Name;
 					else if (a.Type->GetClass() == TypeClass::Structure) element = static_cast<StructureType *>(a.Type.Inner())->TranslateName;
-					result << element << L" " << a.TranslateName << L" : register(b" << string(a.Semantic.Index) << L");\n";
+					result << element << L" " << a.TranslateName << L" : register(b[" << string(a.Semantic.Index) << L"]);\n";
 				}
 			}
 			result << L"void " << scontext.TranslateName << L"(";
@@ -1476,6 +1559,123 @@ namespace Engine
 						}
 					}
 				}
+			}
+			result << L")\n";
+			return result.ToString();
+		}
+		string MakeMslCodeForStructure(StructureType * type)
+		{
+			DynamicString result;
+			result << L"struct " << type->TranslateName << L" {\n";
+			for (int i = 0; i < type->FieldNames.Length(); i++) {
+				result << L"\t";
+				if (type->IsExternal && type->FieldTypes[i].Class == SimpleTypeClass::Vector && type->FieldTypes[i].Domain != SimpleTypeDomain::Boolean) {
+					result << L"simd::packed_" + type->FieldTypes[i].Name;
+				} else result << type->FieldTypes[i].Name;
+				result << L" " << type->FieldTranslateNames[i];
+				if (type->FieldArraySizes[i]) result << L"[" << string(type->FieldArraySizes[i]) << L"]";
+				auto mode = type->FieldModes[i];
+				if (mode == InterpolationMode::Linear) result << L" [[center_perspective]]";
+				else if (mode == InterpolationMode::None) result << L" [[flat]]";
+				else if (mode == InterpolationMode::NoPerspective) result << L" [[center_no_perspective]]";
+				result << L";\n";
+			}
+			result << L"};\n";
+			result << L"struct pw_" << type->TranslateName << L" {\n";
+			result << L"\t" << type->TranslateName << L" vdata;\n";
+			result << L"\tfloat4 vpos [[position]];\n";
+			result << L"};\n";
+			return result.ToString();
+		}
+		string MakeMslCodeForShaderSignature(CompilerShaderContext & scontext, string & rvt)
+		{
+			DynamicString result;
+			string retval_struct;
+			for (auto & arg : scontext.Arguments) if (arg.Usage == ShaderArgumentUsage::Output && arg.Semantic.Semantic == SemanticClass::NoSemantic) {
+				retval_struct = static_cast<StructureType *>(arg.Type.Inner())->TranslateName;
+				break;
+			}
+			if (scontext.Class == ShaderClass::Vertex) {
+				if (retval_struct.Length()) {
+					for (auto & arg : scontext.Arguments) if (arg.Usage == ShaderArgumentUsage::Output) {
+						if (arg.Semantic.Semantic == SemanticClass::Position) {
+							if (retval_struct.Length()) arg.TranslateName = L"egsl_retval.vpos";
+							else arg.TranslateName = L"egsl_retval";
+						} else if (arg.Semantic.Semantic == SemanticClass::NoSemantic) {
+							arg.TranslateName = L"egsl_retval.vdata";
+						}
+					}
+					result << L"vertex pw_" << retval_struct;
+					rvt = L"pw_" + retval_struct;
+				} else {
+					result << L"vertex float4";
+					rvt = L"float4";
+				}
+			} else if (scontext.Class == ShaderClass::Pixel) {
+				result << L"struct " << scontext.TranslateName << L" {\n";
+				uint index = 0;
+				for (auto & arg : scontext.Arguments) if (arg.Usage == ShaderArgumentUsage::Output) {
+					auto fn = L"value_" + string(index);
+					arg.TranslateName = L"egsl_retval." + fn;
+					index++;
+					if (arg.Semantic.Semantic == SemanticClass::Color) {
+						result << L"\t" << static_cast<SimpleType *>(arg.Type.Inner())->Name << L" " << fn << L" [[color(" << string(arg.Semantic.Index) << L")]];\n";
+					} else if (arg.Semantic.Semantic == SemanticClass::Depth) {
+						result << L"\t" << static_cast<SimpleType *>(arg.Type.Inner())->Name << L" " << fn << L" [[depth_argument(any)]];\n";
+					} else if (arg.Semantic.Semantic == SemanticClass::Stencil) {
+						result << L"\t" << static_cast<SimpleType *>(arg.Type.Inner())->Name << L" " << fn << L" [[stencil]];\n";
+					}
+				}
+				result << L"};\n";
+				result << L"fragment " << scontext.TranslateName;
+				rvt = scontext.TranslateName;
+			}
+			result << L" " << scontext.Name << L"(";
+			int index = 0;
+			for (auto & arg : scontext.Arguments) if (arg.Usage == ShaderArgumentUsage::Input) {
+				if (index) result << L", ";
+				if (arg.Semantic.Semantic == SemanticClass::Vertex) {
+					result << L"uint " << arg.TranslateName << L" [[vertex_id]]";
+				} else if (arg.Semantic.Semantic == SemanticClass::Instance) {
+					result << L"uint " << arg.TranslateName << L" [[instance_id]]";
+				} else if (arg.Semantic.Semantic == SemanticClass::Front) {
+					result << L"bool " << arg.TranslateName << L" [[front_facing]]";
+				} else if (arg.Semantic.Semantic == SemanticClass::Texture) {
+					auto reg = static_cast<RegisterType *>(arg.Type.Inner());
+					auto sim = static_cast<SimpleType *>(reg->InnerType.Inner());
+					if (reg->Dimensions == 0) result << L"texture1d<";
+					else if (reg->Dimensions == 1) result << L"texture2d<";
+					else if (reg->Dimensions == 2) result << L"texturecube<";
+					else if (reg->Dimensions == 3) result << L"texture3d<";
+					else if (reg->Dimensions == 4) result << L"texture1d_array<";
+					else if (reg->Dimensions == 5) result << L"texture2d_array<";
+					else if (reg->Dimensions == 6) result << L"texturecube_array<";
+					if (sim->Domain == SimpleTypeDomain::Float) result << L"float";
+					else if (sim->Domain == SimpleTypeDomain::Integer) result << L"int";
+					else if (sim->Domain == SimpleTypeDomain::UnsignedInteger) result << L"uint";
+					else if (sim->Domain == SimpleTypeDomain::Boolean) result << L"uint";
+					result << L"> " << arg.TranslateName << L" [[texture(" << string(arg.Semantic.Index) << L")]]";
+				} else if (arg.Semantic.Semantic == SemanticClass::Buffer) {
+					result << L"constant ";
+					auto reg = static_cast<RegisterType *>(arg.Type.Inner());
+					string element;
+					if (reg->InnerType->GetClass() == TypeClass::Simple) element = static_cast<SimpleType *>(reg->InnerType.Inner())->Name;
+					else if (reg->InnerType->GetClass() == TypeClass::Structure) element = static_cast<StructureType *>(reg->InnerType.Inner())->TranslateName;
+					result << element << L" * " << arg.TranslateName << L" [[buffer(" << string(arg.Semantic.Index) << L")]]";
+				} else if (arg.Semantic.Semantic == SemanticClass::Constant) {
+					result << L"constant ";
+					string element;
+					if (arg.Type->GetClass() == TypeClass::Simple) element = static_cast<SimpleType *>(arg.Type.Inner())->Name;
+					else if (arg.Type->GetClass() == TypeClass::Structure) element = static_cast<StructureType *>(arg.Type.Inner())->TranslateName;
+					result << element << L" * " << arg.TranslateName << L" [[buffer(" << string(arg.Semantic.Index) << L")]]";
+					arg.TranslateName = L"(*" + arg.TranslateName + L")";
+				} else if (arg.Semantic.Semantic == SemanticClass::Sampler) {
+					result << L"sampler " << arg.TranslateName << L" [[sampler(" << string(arg.Semantic.Index) << L")]]";
+				} else if (arg.Semantic.Semantic == SemanticClass::NoSemantic) {
+					result << L"pw_" << static_cast<StructureType *>(arg.Type.Inner())->TranslateName << L" egsl_vs [[stage_in]]";
+					arg.TranslateName = L"egsl_vs.vdata";
+				}
+				index++;
 			}
 			result << L")\n";
 			return result.ToString();

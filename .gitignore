@@ -36,3 +36,6 @@ _build
 .vscode
 *.egso
 *.hlsl
+*.metal
+
+.DS_Store

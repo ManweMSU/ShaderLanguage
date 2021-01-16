@@ -1,7 +1,9 @@
 ﻿#include "CompileDX.h"
 
+#ifdef ENGINE_WINDOWS
 #include <PlatformDependent/Direct3D.h>
 #include <d3dcompiler.h>
+#endif
 
 #pragma comment(lib, "d3dcompiler.lib")
 
@@ -11,6 +13,7 @@ namespace Engine
 	{
 		DataBlock * CompileHLSL(const string & code, const string & entry, ShaderClass cls, DynamicString & log)
 		{
+			#ifdef ENGINE_WINDOWS
 			LPCSTR target = 0;
 			if (cls == ShaderClass::Vertex) target = "vs_4_1";
 			else if (cls == ShaderClass::Pixel) target = "ps_4_1";
@@ -38,6 +41,10 @@ namespace Engine
 				}
 				return 0;
 			}
+			#else
+			log << L"Compilation of HLSL for Direct3D is not available now.\n";
+			return 0;
+			#endif
 		}
 	}
 }

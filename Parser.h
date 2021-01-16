@@ -61,6 +61,7 @@ namespace Engine
 		};
 		struct StructureType : public LanguageType
 		{
+			bool IsExternal;
 			string Name;
 			string TranslateName;
 			Array<string> FieldNames = Array<string>(0x10);
@@ -109,6 +110,7 @@ namespace Engine
 		{
 			OutputTarget Target;
 			VoidType Void;
+			Array<string> hints = Array<string>(0x10);
 			ObjectArray<SimpleType> SimpleTypes = ObjectArray<SimpleType>(0x20);
 			ObjectArray<RegisterType> RegisterTypes = ObjectArray<RegisterType>(0x20);
 			ObjectArray<StructureType> StructureTypes = ObjectArray<StructureType>(0x20);
@@ -135,7 +137,10 @@ namespace Engine
 		bool CheckIdentity(ValueDescriptor d1, ValueDescriptor d2);
 		string TranslateExpression(const Array<Syntax::Token> & text, int & cp, CompilerCommonContext & context, CompilerShaderContext & scontext, const ValueDescriptor * req_ret_desc, ValueDescriptor * ret_desc = 0);
 		void TranslateCode(const Array<Syntax::Token> & text, CompilerCommonContext & context);
+
 		string MakeHlslCodeForStructure(StructureType * type);
 		string MakeHlslCodeForShaderSignature(CompilerShaderContext & scontext);
+		string MakeMslCodeForStructure(StructureType * type);
+		string MakeMslCodeForShaderSignature(CompilerShaderContext & scontext, string & rvt);
 	}
 }

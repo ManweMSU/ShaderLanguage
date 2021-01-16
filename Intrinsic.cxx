@@ -118,6 +118,15 @@ namespace Engine
 			}
 		}
 		void IntrinsicTranslateContext::CheckIdentity(ValueDescriptor from, ValueDescriptor to) { EGSL::CheckIdentity(from, to, last_arg_at); }
+		void IntrinsicTranslateContext::CheckMetalSIMD(ValueDescriptor value_for, const string & func)
+		{
+			if (value_for.Type->GetClass() == TypeClass::Simple && static_cast<SimpleType *>(value_for.Type)->Class == SimpleTypeClass::Matrix) {
+				string text = FormatString(L"SIMD function '%0' is not available for MSL", func);
+				if (context.Target == OutputTarget::Metal) {
+					throw CompilationException(CompilationError::OperatorIsNotApplicable, last_arg_at, text);
+				} else context.hints.Append(text);
+			}
+		}
 		void IntrinsicTranslateContext::SetReturnValue(LanguageType * type, bool assignable)
 		{
 			retval.Type = type;
@@ -191,6 +200,7 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_INT | ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			return L"abs(" + val + L")";
 		}
@@ -199,6 +209,7 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			return L"acos(" + val + L")";
 		}
@@ -207,6 +218,7 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_DOMAIN | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(context.FindSimpleType(SimpleTypeDomain::Boolean, SimpleTypeClass::Scalar));
 			return L"all(" + val + L")";
 		}
@@ -215,6 +227,7 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_DOMAIN | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(context.FindSimpleType(SimpleTypeDomain::Boolean, SimpleTypeClass::Scalar));
 			return L"any(" + val + L")";
 		}
@@ -223,30 +236,40 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_INT | ST_UINT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
-			context.SetReturnValue(context.FindSimpleType(SimpleTypeDomain::Float, GetSimpleClass(desc), GetColumns(desc), GetRows(desc)));
-			return L"asfloat(" + val + L")";
+			context.CheckMetalSIMD(desc, name);
+			auto rv = context.FindSimpleType(SimpleTypeDomain::Float, GetSimpleClass(desc), GetColumns(desc), GetRows(desc));
+			context.SetReturnValue(rv);
+			if (context.GetCommonContext().Target == OutputTarget::Metal) return L"as_type<" + rv->Name + L">(" + val + L")";
+			else return L"asfloat(" + val + L")";
 		}
 		string TranslateAsInt(const string & name, IntrinsicTranslateContext & context)
 		{
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_UINT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
-			context.SetReturnValue(context.FindSimpleType(SimpleTypeDomain::Integer, GetSimpleClass(desc), GetColumns(desc), GetRows(desc)));
-			return L"asint(" + val + L")";
+			context.CheckMetalSIMD(desc, name);
+			auto rv = context.FindSimpleType(SimpleTypeDomain::Integer, GetSimpleClass(desc), GetColumns(desc), GetRows(desc));
+			context.SetReturnValue(rv);
+			if (context.GetCommonContext().Target == OutputTarget::Metal) return L"as_type<" + rv->Name + L">(" + val + L")";
+			else return L"asint(" + val + L")";
 		}
 		string TranslateAsUInt(const string & name, IntrinsicTranslateContext & context)
 		{
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_INT | ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
-			context.SetReturnValue(context.FindSimpleType(SimpleTypeDomain::UnsignedInteger, GetSimpleClass(desc), GetColumns(desc), GetRows(desc)));
-			return L"asuint(" + val + L")";
+			context.CheckMetalSIMD(desc, name);
+			auto rv = context.FindSimpleType(SimpleTypeDomain::UnsignedInteger, GetSimpleClass(desc), GetColumns(desc), GetRows(desc));
+			context.SetReturnValue(rv);
+			if (context.GetCommonContext().Target == OutputTarget::Metal) return L"as_type<" + rv->Name + L">(" + val + L")";
+			else return L"asuint(" + val + L")";
 		}
 		string TranslateArcSin(const string & name, IntrinsicTranslateContext & context)
 		{
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			return L"asin(" + val + L")";
 		}
@@ -255,6 +278,7 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			if (context.ArgumentAvailable()) {
 				ValueDescriptor desc2;
@@ -268,6 +292,7 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			return L"ceil(" + val + L")";
 		}
@@ -276,6 +301,7 @@ namespace Engine
 			ValueDescriptor desc, desc_min, desc_max;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_INT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			auto val_min = context.TranslateArgument(desc_min);
 			context.CheckTypecast(desc_min, desc);
@@ -290,14 +316,16 @@ namespace Engine
 				L"'clip' is available in pixel shader only");
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
-			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
-			return L"clip(" + val + L")";
+			context.CheckTypecast(desc, ST_FLOAT | ST_SCALAR | ST_ANYCOL | ST_ANYROW);
+			if (context.GetCommonContext().Target == OutputTarget::Metal) return L"if (" + val + L" < 0.0f) discard_fragment();";
+			else return L"clip(" + val + L")";
 		}
 		string TranslateCos(const string & name, IntrinsicTranslateContext & context)
 		{
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			return L"cos(" + val + L")";
 		}
@@ -306,6 +334,7 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			return L"cosh(" + val + L")";
 		}
@@ -352,6 +381,7 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			return L"exp(" + val + L")";
 		}
@@ -360,6 +390,7 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			return L"exp2(" + val + L")";
 		}
@@ -380,6 +411,7 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			return L"floor(" + val + L")";
 		}
@@ -388,6 +420,7 @@ namespace Engine
 			ValueDescriptor desc, desc2;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			auto val2 = context.TranslateArgument(desc2);
 			context.CheckTypecast(desc2, desc);
@@ -398,6 +431,7 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(context.FindSimpleType(SimpleTypeDomain::Boolean, GetSimpleClass(desc), GetColumns(desc), GetRows(desc)));
 			return L"isfinite(" + val + L")";
 		}
@@ -406,6 +440,7 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(context.FindSimpleType(SimpleTypeDomain::Boolean, GetSimpleClass(desc), GetColumns(desc), GetRows(desc)));
 			return L"isinf(" + val + L")";
 		}
@@ -414,6 +449,7 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(context.FindSimpleType(SimpleTypeDomain::Boolean, GetSimpleClass(desc), GetColumns(desc), GetRows(desc)));
 			return L"isnan(" + val + L")";
 		}
@@ -422,10 +458,17 @@ namespace Engine
 			ValueDescriptor desc, desc2;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			auto val2 = context.TranslateArgument(desc2);
 			context.CheckTypecast(desc2, desc);
-			return L"ldexp(" + val + L", " + val2 + L")";
+			string itype;
+			if (IsScalar(desc)) itype = L"int";
+			else if (IsVector(desc) && GetColumns(desc) == 2) itype = L"int2";
+			else if (IsVector(desc) && GetColumns(desc) == 3) itype = L"int3";
+			else if (IsVector(desc) && GetColumns(desc) == 4) itype = L"int4";
+			if (context.GetCommonContext().Target == OutputTarget::Metal) return L"ldexp(" + val + L", " + itype + L"(" + val2 + L"))";
+			else return L"ldexp(" + val + L", " + val2 + L")";
 		}
 		string TranslateLength(const string & name, IntrinsicTranslateContext & context)
 		{
@@ -440,18 +483,21 @@ namespace Engine
 			ValueDescriptor desc_a, desc_b, desc_c;
 			auto val = context.TranslateArgument(desc_a);
 			context.CheckTypecast(desc_a, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc_a, name);
 			auto val2 = context.TranslateArgument(desc_b);
 			context.CheckTypecast(desc_b, desc_a);
 			auto val3 = context.TranslateArgument(desc_c);
 			context.CheckTypecast(desc_c, desc_a);
 			context.SetReturnValue(desc_a.Type);
-			return L"lerp(" + val + L", " + val2 + L", " + val3 + L")";
+			if (context.GetCommonContext().Target == OutputTarget::Metal) return L"mix(" + val + L", " + val2 + L", " + val3 + L")";
+			else return L"lerp(" + val + L", " + val2 + L", " + val3 + L")";
 		}
 		string TranslateLog(const string & name, IntrinsicTranslateContext & context)
 		{
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			return L"log(" + val + L")";
 		}
@@ -460,6 +506,7 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			return L"log2(" + val + L")";
 		}
@@ -468,6 +515,7 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			return L"log10(" + val + L")";
 		}
@@ -476,6 +524,7 @@ namespace Engine
 			ValueDescriptor desc_a, desc_b;
 			auto val = context.TranslateArgument(desc_a);
 			context.CheckTypecast(desc_a, ST_FLOAT | ST_INT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc_a, name);
 			auto val2 = context.TranslateArgument(desc_b);
 			context.CheckTypecast(desc_b, desc_a);
 			context.SetReturnValue(desc_a.Type);
@@ -486,6 +535,7 @@ namespace Engine
 			ValueDescriptor desc_a, desc_b;
 			auto val = context.TranslateArgument(desc_a);
 			context.CheckTypecast(desc_a, ST_FLOAT | ST_INT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc_a, name);
 			auto val2 = context.TranslateArgument(desc_b);
 			context.CheckTypecast(desc_b, desc_a);
 			context.SetReturnValue(desc_a.Type);
@@ -496,6 +546,7 @@ namespace Engine
 			ValueDescriptor desc_a, desc_b;
 			auto val = context.TranslateArgument(desc_a);
 			context.CheckTypecast(desc_a, ST_FLOAT | ST_INT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc_a, name);
 			auto val2 = context.TranslateArgument(desc_b);
 			context.CheckIdentity(desc_b, desc_a);
 			if (!desc_b.IsAssignable) throw CompilationException(CompilationError::ExpressionIsNotAssignable, context.GetLastArgumentPosition(), L"");
@@ -530,7 +581,8 @@ namespace Engine
 					context.SetReturnValue(context.FindSimpleType(GetTypeDomain(desc_a), SimpleTypeClass::Vector, GetRows(desc_a)));
 				}
 			}
-			return L"mul(" + val + L", " + val2 + L")";
+			if (context.GetCommonContext().Target == OutputTarget::Metal) return L"(" + val2 + L" * " + val + L")";
+			else return L"mul(" + val + L", " + val2 + L")";
 		}
 		string TranslateNormalize(const string & name, IntrinsicTranslateContext & context)
 		{
@@ -545,6 +597,7 @@ namespace Engine
 			ValueDescriptor desc_a, desc_b;
 			auto val = context.TranslateArgument(desc_a);
 			context.CheckTypecast(desc_a, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc_a, name);
 			auto val2 = context.TranslateArgument(desc_b);
 			context.CheckTypecast(desc_b, desc_a);
 			context.SetReturnValue(desc_a.Type);
@@ -577,6 +630,7 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			return L"round(" + val + L")";
 		}
@@ -585,6 +639,7 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			return L"rsqrt(" + val + L")";
 		}
@@ -593,6 +648,7 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			return L"saturate(" + val + L")";
 		}
@@ -601,6 +657,7 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_INT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(context.FindSimpleType(SimpleTypeDomain::Integer, GetSimpleClass(desc), GetColumns(desc), GetRows(desc)));
 			return L"sign(" + val + L")";
 		}
@@ -609,6 +666,7 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			return L"sin(" + val + L")";
 		}
@@ -617,19 +675,22 @@ namespace Engine
 			ValueDescriptor desc_a, desc_b, desc_c;
 			auto val = context.TranslateArgument(desc_a);
 			context.CheckTypecast(desc_a, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc_a, name);
 			auto val2 = context.TranslateArgument(desc_b);
 			context.CheckIdentity(desc_b, desc_a);
 			if (!desc_b.IsAssignable) throw CompilationException(CompilationError::ExpressionIsNotAssignable, context.GetLastArgumentPosition(), L"");
 			auto val3 = context.TranslateArgument(desc_c);
 			context.CheckIdentity(desc_c, desc_a);
 			if (!desc_c.IsAssignable) throw CompilationException(CompilationError::ExpressionIsNotAssignable, context.GetLastArgumentPosition(), L"");
-			return L"sincos(" + val + L", " + val2 + L", " + val3 + L")";
+			if (context.GetCommonContext().Target == OutputTarget::Metal) return val2 + L" = sincos(" + val + L", " + val3 + L")";
+			else return L"sincos(" + val + L", " + val2 + L", " + val3 + L")";
 		}
 		string TranslateSinHyperbolic(const string & name, IntrinsicTranslateContext & context)
 		{
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			return L"sinh(" + val + L")";
 		}
@@ -638,6 +699,7 @@ namespace Engine
 			ValueDescriptor desc_a, desc_b, desc_c;
 			auto val = context.TranslateArgument(desc_a);
 			context.CheckTypecast(desc_a, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc_a, name);
 			auto val2 = context.TranslateArgument(desc_b);
 			context.CheckTypecast(desc_b, desc_a);
 			auto val3 = context.TranslateArgument(desc_c);
@@ -650,6 +712,7 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			return L"sqrt(" + val + L")";
 		}
@@ -658,6 +721,7 @@ namespace Engine
 			ValueDescriptor desc_a, desc_b;
 			auto val = context.TranslateArgument(desc_a);
 			context.CheckTypecast(desc_a, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc_a, name);
 			auto val2 = context.TranslateArgument(desc_b);
 			context.CheckTypecast(desc_b, desc_a);
 			context.SetReturnValue(desc_a.Type);
@@ -668,6 +732,7 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			return L"tan(" + val + L")";
 		}
@@ -676,6 +741,7 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			return L"tanh(" + val + L")";
 		}
@@ -692,6 +758,7 @@ namespace Engine
 			ValueDescriptor desc;
 			auto val = context.TranslateArgument(desc);
 			context.CheckTypecast(desc, ST_FLOAT | ST_CLASS | ST_ANYCOL | ST_ANYROW);
+			context.CheckMetalSIMD(desc, name);
 			context.SetReturnValue(desc.Type);
 			return L"trunc(" + val + L")";
 		}
@@ -738,6 +805,9 @@ namespace Engine
 					return out.ToString();
 				}
 			} else if (t->Class == SimpleTypeClass::Matrix) {
+				if (t->Domain != SimpleTypeDomain::Float && context.GetCommonContext().Target == OutputTarget::Metal) {
+					throw CompilationException(CompilationError::InappropriateType, context.GetFunctionPosition(), L"MSL translation supports 'float' matricies only");
+				}
 				ValueDescriptor desc;
 				auto val = context.TranslateArgument(desc);
 				if (IsMatrix(desc) && GetColumns(desc) == t->Columns && GetRows(desc) == t->Rows) {
@@ -780,11 +850,40 @@ namespace Engine
 			auto coord_val = context.TranslateArgument(coord);
 			context.CheckTypecast(coord, MakeDesc(coord_type));
 			context.SetReturnValue(ret_type);
-			if (context.ArgumentAvailable()) {
-				auto mip_val = context.TranslateArgument(mip);
-				context.CheckTypecast(mip, MakeDesc(context.FindSimpleType(SimpleTypeDomain::Float, SimpleTypeClass::Scalar)));
-				return tex_val + L".SampleLevel(" + sam_val + L", " + coord_val + L", " + mip_val + L")";
-			} else return tex_val + L".Sample(" + sam_val + L", " + coord_val + L")";
+			if (context.GetCommonContext().Target == OutputTarget::Metal) {
+				DynamicString result;
+				auto reg = static_cast<RegisterType *>(texture.Type);
+				if (context.ArgumentAvailable()) {
+					auto mip_val = context.TranslateArgument(mip);
+					context.CheckTypecast(mip, MakeDesc(context.FindSimpleType(SimpleTypeDomain::Float, SimpleTypeClass::Scalar)));
+					if (reg->Dimensions == 0) result << (tex_val + L".sample(" + sam_val + L", " + coord_val + L")");
+					else if (reg->Dimensions == 1) result << (tex_val + L".sample(" + sam_val + L", " + coord_val + L", level(" + mip_val + L"))");
+					else if (reg->Dimensions == 2) result << (tex_val + L".sample(" + sam_val + L", " + coord_val + L", level(" + mip_val + L"))");
+					else if (reg->Dimensions == 3) result << (tex_val + L".sample(" + sam_val + L", " + coord_val + L", level(" + mip_val + L"))");
+					else if (reg->Dimensions == 4) result << (tex_val + L".sample(" + sam_val + L", " + coord_val + L".x, uint(" + coord_val + L".y))");
+					else if (reg->Dimensions == 5) result << (tex_val + L".sample(" + sam_val + L", " + coord_val + L".xy, uint(" + coord_val + L".z), level(" + mip_val + L"))");
+					else if (reg->Dimensions == 6) result << (tex_val + L".sample(" + sam_val + L", " + coord_val + L".xyz, uint(" + coord_val + L".w), level(" + mip_val + L"))");
+				} else {
+					if (reg->Dimensions == 0) result << (tex_val + L".sample(" + sam_val + L", " + coord_val + L")");
+					else if (reg->Dimensions == 1) result << (tex_val + L".sample(" + sam_val + L", " + coord_val + L")");
+					else if (reg->Dimensions == 2) result << (tex_val + L".sample(" + sam_val + L", " + coord_val + L")");
+					else if (reg->Dimensions == 3) result << (tex_val + L".sample(" + sam_val + L", " + coord_val + L")");
+					else if (reg->Dimensions == 4) result << (tex_val + L".sample(" + sam_val + L", " + coord_val + L".x, uint(" + coord_val + L".y))");
+					else if (reg->Dimensions == 5) result << (tex_val + L".sample(" + sam_val + L", " + coord_val + L".xy, uint(" + coord_val + L".z))");
+					else if (reg->Dimensions == 6) result << (tex_val + L".sample(" + sam_val + L", " + coord_val + L".xyz, uint(" + coord_val + L".w))");
+				}
+				auto sim = static_cast<SimpleType *>(reg->InnerType.Inner());
+				if (sim->Class == SimpleTypeClass::Scalar) result << L".x";
+				else if (sim->Class == SimpleTypeClass::Vector && sim->Columns == 2) result << L".xy";
+				else if (sim->Class == SimpleTypeClass::Vector && sim->Columns == 3) result << L".xyz";
+				return result.ToString();
+			} else {
+				if (context.ArgumentAvailable()) {
+					auto mip_val = context.TranslateArgument(mip);
+					context.CheckTypecast(mip, MakeDesc(context.FindSimpleType(SimpleTypeDomain::Float, SimpleTypeClass::Scalar)));
+					return tex_val + L".SampleLevel(" + sam_val + L", " + coord_val + L", " + mip_val + L")";
+				} else return tex_val + L".Sample(" + sam_val + L", " + coord_val + L")";
+			}
 		}
 		IntrinsicTranslator FindIntrinsicTranslator(CompilerCommonContext & context, const string & name)
 		{
@@ -828,7 +927,7 @@ namespace Engine
 			else if (name == L"lerp") return TranslateLerp;
 			else if (name == L"ln") return TranslateLog;
 			else if (name == L"lb") return TranslateLog2;
-			else if (name == L"log") return TranslateLog10;
+			else if (name == L"lg") return TranslateLog10;
 			// M
 			else if (name == L"max") return TranslateMax;
 			else if (name == L"min") return TranslateMin;

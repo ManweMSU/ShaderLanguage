@@ -13,7 +13,7 @@ struct Data
 }
 
 vertex VertexFunction(
-	in array<Vertex> verticies : buffer[0],
+	in array<Vertex> verticies : buffer[1],
 	in World world : constant[0],
 	in uint id : vertex,
 	out Data data,
