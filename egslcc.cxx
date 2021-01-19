@@ -275,7 +275,7 @@ int Main(void)
 			console << L"  " << ENGINE_VI_APPSYSNAME << L" <source.egsl> :Sdlot" << LineFeed();
 			console << L"Where source.egsl is the input EGSL file." << LineFeed();
 			console << L"You can optionally use the next compile options:" << LineFeed();
-			console << L"  :S - use silent mode - supress any output, except output path," << LineFeed();
+			console << L"  :S - use silent mode - supress any text output," << LineFeed();
 			console << L"  :d - translate only, don't compile the shaders," << LineFeed();
 			console << L"  :l - build binary shader library file (.egso)," << LineFeed();
 			console << L"  :o - specify the output library file (as the next argument)," << LineFeed();
