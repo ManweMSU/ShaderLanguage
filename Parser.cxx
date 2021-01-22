@@ -644,6 +644,31 @@ namespace Engine
 			try { CheckIdentity(d1, d2, 0); } catch (...) { return false; }
 			return true;
 		}
+		bool FindConstant(const string & name, float & result)
+		{
+			if (name == L"C_PI") {
+				result = ENGINE_PI;
+				return true;
+			} else if (name == L"C_2PI") {
+				result = 2.0 * ENGINE_PI;
+				return true;
+			} else if (name == L"C_PI2") {
+				result = ENGINE_PI / 2.0;
+				return true;
+			} else if (name == L"C_PI3") {
+				result = ENGINE_PI / 3.0;
+				return true;
+			} else if (name == L"C_PI4") {
+				result = ENGINE_PI / 4.0;
+				return true;
+			} else if (name == L"C_PI6") {
+				result = ENGINE_PI / 6.0;
+				return true;
+			} else if (name == L"C_E") {
+				result = ENGINE_E;
+				return true;
+			} else return false;
+		}
 		string TranslateExpression(const Array<Syntax::Token> & text, int & cp, CompilerCommonContext & context, CompilerShaderContext & scontext, const ValueDescriptor * req_ret_desc, ValueDescriptor * ret_desc);
 		string TranslateRootLevel(const Array<Syntax::Token> & text, int & cp, CompilerCommonContext & context, CompilerShaderContext & scontext, ValueDescriptor * ret_desc)
 		{
@@ -717,8 +742,22 @@ namespace Engine
 					auto fp = cp;
 					auto name = text[cp].Content;
 					auto trans = FindIntrinsicTranslator(context, name);
-					if (!trans) throw CompilationException(CompilationError::UnknownIdentifier, cp,
-						FormatString(L"'%0' is not a name for a function, a type, a variable or an argument", text[cp].Content));
+					if (!trans) {
+						float result;
+						if (FindConstant(name, result)) {
+							if (ret_desc) {
+								ret_desc->Type = FindType(L"float", context);
+								ret_desc->ArraySize = 0;
+								ret_desc->IsAssignable = false;
+							}
+							auto val = string(result);
+							if (val.FindFirst(L'.') == -1) val += L".0";
+							val += L"f";
+							cp++;
+							return val;
+						} else throw CompilationException(CompilationError::UnknownIdentifier, cp,
+							FormatString(L"'%0' is not a name for a function, a type, a variable, a constant or an argument", text[cp].Content));
+					}
 					cp++;
 					if (text[cp].Class != TokenClass::CharCombo || text[cp].Content != L"(")
 						throw CompilationException(CompilationError::AnotherTokenExpected, cp, L"'(' expected");
