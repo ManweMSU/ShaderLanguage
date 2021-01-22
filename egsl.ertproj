@@ -1,5 +1,5 @@
 ﻿CompileAll = true
-OutputName = "egslcc"
+OutputName = "egsl"
 Subsystem = "Console"
 UseVersionDefines = true
 VersionInformation {
@@ -7,7 +7,7 @@ VersionInformation {
 	CompanyName = "Engine Software"
 	Copyright = "© Engine Software. 2021"
 	Version = "1.0.0.1"
-	InternalName = "egslcc"
+	InternalName = "egsl"
 	ApplicationIdentifier = "EngineRuntime.EGSL.Compiler"
 	CompanyIdentifier = "EngineSoftware"
 	Description = "Translates and compiles shaders, written in EGSL."

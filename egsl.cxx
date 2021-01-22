@@ -30,6 +30,8 @@ EGSL::OutputTarget GetTargetFromString(const string & name)
 
 struct {
 	bool silent = false;
+	bool supress_warnings = false;
+	bool warnings_as_errors = false;
 	string input;
 	string output;
 	EGSL::OutputForm output_form = EGSL::OutputForm::Library;
@@ -48,6 +50,8 @@ bool ParseCommandLine(Console & console)
 				auto arg = cmd[j];
 				if (arg == L'S') {
 					state.silent = true;
+				} else if (arg == L'W') {
+					state.warnings_as_errors = true;
 				} else if (arg == L'd') {
 					state.output_form = EGSL::OutputForm::Source;
 				} else if (arg == L'l') {
@@ -76,6 +80,8 @@ bool ParseCommandLine(Console & console)
 						console << TextColor(Console::ColorYellow) << L"Invalid command line: argument expected." << TextColorDefault() << LineFeed();
 						return false;
 					}
+				} else if (arg == L'w') {
+					state.supress_warnings = true;
 				} else {
 					console << TextColor(Console::ColorYellow) << FormatString(L"Command line argument \"%0\" is invalid.", string(arg, 1)) << TextColorDefault() << LineFeed();
 					return false;
@@ -171,8 +177,11 @@ int Main(void)
 				return 1;
 			}
 			for (auto & h : context.hints) {
-				console << TextColor(Console::ColorYellow) << L"Warning: " << TextColorDefault() << h << L"." << LineFeed();
+				if (!state.silent && !state.supress_warnings) {
+					console << TextColor(Console::ColorYellow) << L"Warning: " << TextColorDefault() << h << L"." << LineFeed();
+				}
 			}
+			if (context.hints.Length() && state.warnings_as_errors) return 1;
 			if (state.output_target == EGSL::OutputTarget::Direct3D11) {
 				for (auto & shader : context.Shaders) {
 					DynamicString code;
@@ -181,11 +190,12 @@ int Main(void)
 					DynamicString error_log;
 					shader.CompiledBlob = EGSL::CompileHLSL(code.ToString(), shader.TranslateName, shader.Class, error_log);
 					if (shader.CompiledBlob) {
-						if (!state.silent) {
+						if (!state.silent && !state.supress_warnings) {
 							console.SetTextColor(Console::ColorYellow);
 							console.Write(error_log.ToString());
 							console.SetTextColor(Console::ColorDefault);
 						}
+						if (state.warnings_as_errors) for (int i = 0; i < error_log.Length(); i++) if (error_log[i] > 32) return 1;
 					} else {
 						if (!state.silent) {
 							console.SetTextColor(Console::ColorRed);
@@ -232,7 +242,7 @@ int Main(void)
 					DynamicString error_log;
 					auto status = EGSL::CompileMSL(code, L"", error_log);
 					if (status) {
-						if (!state.silent) {
+						if (!state.silent && !state.supress_warnings) {
 							console.SetTextColor(Console::ColorYellow);
 							console.Write(error_log.ToString());
 							console.SetTextColor(Console::ColorDefault);
@@ -250,11 +260,12 @@ int Main(void)
 				DynamicString error_log;
 				auto status = EGSL::CompileMSL(code, state.output + L".egso", error_log);
 				if (status) {
-					if (!state.silent) {
+					if (!state.silent && !state.supress_warnings) {
 						console.SetTextColor(Console::ColorYellow);
 						console.Write(error_log.ToString());
 						console.SetTextColor(Console::ColorDefault);
 					}
+					if (state.warnings_as_errors) for (int i = 0; i < error_log.Length(); i++) if (error_log[i] > 32) return 1;
 				} else {
 					if (!state.silent) {
 						console.SetTextColor(Console::ColorRed);
@@ -272,14 +283,16 @@ int Main(void)
 			console << L"Copyright " << string(ENGINE_VI_COPYRIGHT).Replace(L'\xA9', L"(C)") << LineFeed();
 			console << L"Version " << ENGINE_VI_APPVERSION << L", build " << ENGINE_VI_BUILD << LineFeed() << LineFeed();
 			console << L"Command line syntax:" << LineFeed();
-			console << L"  " << ENGINE_VI_APPSYSNAME << L" <source.egsl> :Sdlot" << LineFeed();
+			console << L"  " << ENGINE_VI_APPSYSNAME << L" <source.egsl> :SWdlotw" << LineFeed();
 			console << L"Where source.egsl is the input EGSL file." << LineFeed();
 			console << L"You can optionally use the next compile options:" << LineFeed();
 			console << L"  :S - use silent mode - supress any text output," << LineFeed();
+			console << L"  :W - interpret all warnings as errors," << LineFeed();
 			console << L"  :d - translate only, don't compile the shaders," << LineFeed();
 			console << L"  :l - build binary shader library file (.egso)," << LineFeed();
 			console << L"  :o - specify the output library file (as the next argument)," << LineFeed();
-			console << L"  :t - specify the target interface implementation (as the next argument)." << LineFeed();
+			console << L"  :t - specify the target interface implementation (as the next argument)," << LineFeed();
+			console << L"  :w - supress warnings." << LineFeed();
 			console << LineFeed();
 		}
 	} catch (Exception & e) {
