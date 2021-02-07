@@ -105,6 +105,8 @@ int Main(void)
 	try {
 		if (!ParseCommandLine(console)) return 1;
 		if (state.input.Length()) {
+			if (!state.silent) console << L"Compiling " << TextColor(Console::ColorCyan) <<
+				IO::Path::GetFileName(state.input) << TextColorDefault() << L"...";
 			if (state.output_target == EGSL::OutputTarget::Unknown) state.output_target = GetPlatformDefaultTarget();
 			if (!state.output.Length()) {
 				state.output = IO::Path::GetDirectory(state.input) + L"/" + IO::Path::GetFileNameWithoutExtension(state.input);
@@ -125,8 +127,11 @@ int Main(void)
 				}
 				chars = buffer.ToString();
 			} catch (IO::FileAccessException & e) {
-				if (!state.silent) console << TextColor(Console::ColorRed) <<
-					FormatString(L"Failed to load the input file: file system error %0.", string(e.code, HexadecimalBase, 4)) << TextColorDefault() << LineFeed();
+				if (!state.silent) {
+					console << TextColor(Console::ColorRed) << L"Failed" << TextColorDefault() << LineFeed();
+					console << TextColor(Console::ColorRed) << FormatString(L"Failed to load the input file: file system error %0.",
+						string(e.code, HexadecimalBase, 4)) << TextColorDefault() << LineFeed();
+				}
 				return 1;
 			}
 			SafePointer< Array<Syntax::Token> > text;
@@ -137,6 +142,7 @@ int Main(void)
 				int x, y, length, ofs;
 				EGSL::LocateErrorPosition(chars, e, exdesc, line, x, y, ofs, length);
 				if (!state.silent) {
+					console << TextColor(Console::ColorRed) << L"Failed" << TextColorDefault() << LineFeed();
 					console << TextColor(Console::ColorRed) << FormatString(L"Compilation error: #%0 - %1 at (%2, %3).",
 						string(uint(EGSL::CompilationError::InvalidToken), HexadecimalBase, 4),
 						EGSL::DescriptionForError(EGSL::CompilationError::InvalidToken), y + 1, x + 1) << TextColorDefault() << LineFeed();
@@ -155,6 +161,7 @@ int Main(void)
 				int x, y, length, ofs;
 				EGSL::LocateErrorPosition(chars, e, exdesc, line, x, y, ofs, length);
 				if (!state.silent) {
+					console << TextColor(Console::ColorRed) << L"Failed" << TextColorDefault() << LineFeed();
 					console << TextColor(Console::ColorRed) << FormatString(L"Compilation error: #%0 - %1 at (%2, %3).",
 						string(uint(EGSL::CompilationError::InvalidToken), HexadecimalBase, 4),
 						EGSL::DescriptionForError(EGSL::CompilationError::InvalidToken), y + 1, x + 1) << TextColorDefault() << LineFeed();
@@ -168,6 +175,7 @@ int Main(void)
 				int x, y, length, ofs;
 				EGSL::LocateErrorPosition(chars, *text, e, exdesc, line, x, y, ofs, length);
 				if (!state.silent) {
+					console << TextColor(Console::ColorRed) << L"Failed" << TextColorDefault() << LineFeed();
 					console << TextColor(Console::ColorRed) << FormatString(L"Compilation error: #%0 - %1 at (%2, %3).",
 						string(uint(e.Error), HexadecimalBase, 4), EGSL::DescriptionForError(e.Error), y + 1, x + 1) << TextColorDefault() << LineFeed();
 					if (exdesc.Length()) console << TextColor(Console::ColorRed) << exdesc << L"." << TextColorDefault() << LineFeed() << LineFeed();
@@ -175,6 +183,10 @@ int Main(void)
 					console << string(L' ', ofs) << TextColor(Console::ColorRed) << L"^" << string(L'~', length - 1) << TextColorDefault() << LineFeed();
 				}
 				return 1;
+			}
+			if (!state.silent) {
+				if (context.hints.Length()) console << TextColor(Console::ColorYellow) << L"Succeed" << TextColorDefault() << LineFeed();
+				else console << TextColor(Console::ColorGreen) << L"Succeed" << TextColorDefault() << LineFeed();
 			}
 			for (auto & h : context.hints) {
 				if (!state.silent && !state.supress_warnings) {
@@ -296,10 +308,16 @@ int Main(void)
 			console << LineFeed();
 		}
 	} catch (Exception & e) {
-		if (!state.silent) console << TextColor(Console::ColorRed) << FormatString(L"Shader compiler failed: %0.", e.ToString()) << TextColorDefault() << LineFeed();
+		if (!state.silent) {
+			console << TextColor(Console::ColorRed) << L"Failed" << TextColorDefault() << LineFeed();
+			console << TextColor(Console::ColorRed) << FormatString(L"Shader compiler failed: %0.", e.ToString()) << TextColorDefault() << LineFeed();
+		}
 		return 1;
 	} catch (...) {
-		if (!state.silent) console << TextColor(Console::ColorRed) << L"Shader compiler failed: Unknown exception." << TextColorDefault() << LineFeed();
+		if (!state.silent) {
+			console << TextColor(Console::ColorRed) << L"Failed" << TextColorDefault() << LineFeed();
+			console << TextColor(Console::ColorRed) << L"Shader compiler failed: Unknown exception." << TextColorDefault() << LineFeed();
+		}
 		return 1;
 	}
 	return 0;
