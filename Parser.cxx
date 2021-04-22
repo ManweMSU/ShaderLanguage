@@ -1326,6 +1326,11 @@ namespace Engine
 			cp++;
 			out << L"if (" << cond << L") ";
 			TranslateStatement(text, cp, context, scontext, out, ident);
+			if (text[cp].Class == TokenClass::Keyword && text[cp].Content == L"else") {
+				cp++;
+				out << L"else ";
+				TranslateStatement(text, cp, context, scontext, out, ident);
+			}
 		}
 		void TranslateFor(const Array<Syntax::Token> & text, int & cp, CompilerCommonContext & context, CompilerShaderContext & scontext, DynamicString & out, const string & ident)
 		{

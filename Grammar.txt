@@ -32,7 +32,7 @@ EXPR  -> O1 [ S1 EXPR ]
 AQUAL -> '[' INDEX ']'
 AINIT -> '{' EXPR { ',' EXPR } '}'
 VEXPR -> EXPR | ( ( STYPE | STRUCT_TYPE ) IDENTIFIER [ AQUAL ] [ '=' ( EXPR | AINIT ) ] { ',' IDENTIFIER [ AQUAL ] [ '=' ( EXPR | AINIT ) ] } )
-IF    -> 'if' '(' EXPR ')' STATE
+IF    -> 'if' '(' EXPR ')' STATE [ 'else' STATE ]
 FOR   -> 'for' '(' VEXPR ';' EXPR ';' EXPR ')' STATE
 WHILE -> 'while' '(' EXPR ')' STATE
 DO    -> 'do' STATE 'while' '(' EXPR ')' ';'

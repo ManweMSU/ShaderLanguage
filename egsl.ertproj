@@ -3,12 +3,12 @@ OutputName = "egsl"
 Subsystem = "Console"
 UseVersionDefines = true
 VersionInformation {
+	ApplicationIdentifier = "EngineRuntime.EGSL.Compiler"
 	ApplicationName = "Engine Graphics Shading Language Compiler"
+	CompanyIdentifier = "EngineSoftware"
 	CompanyName = "Engine Software"
 	Copyright = "© Engine Software. 2021"
-	Version = "1.0.0.1"
-	InternalName = "egsl"
-	ApplicationIdentifier = "EngineRuntime.EGSL.Compiler"
-	CompanyIdentifier = "EngineSoftware"
 	Description = "Translates and compiles shaders, written in EGSL."
+	InternalName = "egsl"
+	Version = "1.0.1.2"
 }
