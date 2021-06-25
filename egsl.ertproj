@@ -10,5 +10,5 @@ VersionInformation {
 	Copyright = "© Engine Software. 2021"
 	Description = "Translates and compiles shaders, written in EGSL."
 	InternalName = "egsl"
-	Version = "1.0.1.2"
+	Version = "1.0.1.3"
 }

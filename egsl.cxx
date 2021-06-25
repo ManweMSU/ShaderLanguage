@@ -7,6 +7,7 @@
 
 using namespace Engine;
 using namespace Engine::Streaming;
+using namespace Engine::IO;
 using namespace Engine::IO::ConsoleControl;
 
 EGSL::OutputTarget GetPlatformDefaultTarget(void)
@@ -59,37 +60,37 @@ bool ParseCommandLine(Console & console)
 				} else if (arg == L'o') {
 					if (i < args->Length()) {
 						if (state.output.Length()) {
-							console << TextColor(Console::ColorYellow) << FormatString(L"Output name redefinition.", args->ElementAt(i)) << TextColorDefault() << LineFeed();
+							console << TextColor(ConsoleColor::Yellow) << FormatString(L"Output name redefinition.", args->ElementAt(i)) << TextColorDefault() << LineFeed();
 							return false;
 						}
 						state.output = IO::ExpandPath(args->ElementAt(i));
 						i++;
 					} else {
-						console << TextColor(Console::ColorYellow) << L"Invalid command line: argument expected." << TextColorDefault() << LineFeed();
+						console << TextColor(ConsoleColor::Yellow) << L"Invalid command line: argument expected." << TextColorDefault() << LineFeed();
 						return false;
 					}
 				} else if (arg == L't') {
 					if (i < args->Length()) {
 						auto tag = GetTargetFromString(args->ElementAt(i));
 						if (tag == EGSL::OutputTarget::Unknown) {
-							console << TextColor(Console::ColorYellow) << FormatString(L"Invalid target implementation name: %0.", args->ElementAt(i)) << TextColorDefault() << LineFeed();
+							console << TextColor(ConsoleColor::Yellow) << FormatString(L"Invalid target implementation name: %0.", args->ElementAt(i)) << TextColorDefault() << LineFeed();
 							return false;
 						} else state.output_target = tag;
 						i++;
 					} else {
-						console << TextColor(Console::ColorYellow) << L"Invalid command line: argument expected." << TextColorDefault() << LineFeed();
+						console << TextColor(ConsoleColor::Yellow) << L"Invalid command line: argument expected." << TextColorDefault() << LineFeed();
 						return false;
 					}
 				} else if (arg == L'w') {
 					state.supress_warnings = true;
 				} else {
-					console << TextColor(Console::ColorYellow) << FormatString(L"Command line argument \"%0\" is invalid.", string(arg, 1)) << TextColorDefault() << LineFeed();
+					console << TextColor(ConsoleColor::Yellow) << FormatString(L"Command line argument \"%0\" is invalid.", string(arg, 1)) << TextColorDefault() << LineFeed();
 					return false;
 				}
 			}
 		} else {
 			if (state.input.Length()) {
-				console << TextColor(Console::ColorYellow) << L"Duplicate input file argument on command line." << TextColorDefault() << LineFeed();
+				console << TextColor(ConsoleColor::Yellow) << L"Duplicate input file argument on command line." << TextColorDefault() << LineFeed();
 				return false;
 			}
 			state.input = IO::ExpandPath(cmd);
@@ -105,7 +106,7 @@ int Main(void)
 	try {
 		if (!ParseCommandLine(console)) return 1;
 		if (state.input.Length()) {
-			if (!state.silent) console << L"Compiling " << TextColor(Console::ColorCyan) <<
+			if (!state.silent) console << L"Compiling " << TextColor(ConsoleColor::Cyan) <<
 				IO::Path::GetFileName(state.input) << TextColorDefault() << L"...";
 			if (state.output_target == EGSL::OutputTarget::Unknown) state.output_target = GetPlatformDefaultTarget();
 			if (!state.output.Length()) {
@@ -128,8 +129,8 @@ int Main(void)
 				chars = buffer.ToString();
 			} catch (IO::FileAccessException & e) {
 				if (!state.silent) {
-					console << TextColor(Console::ColorRed) << L"Failed" << TextColorDefault() << LineFeed();
-					console << TextColor(Console::ColorRed) << FormatString(L"Failed to load the input file: file system error %0.",
+					console << TextColor(ConsoleColor::Red) << L"Failed" << TextColorDefault() << LineFeed();
+					console << TextColor(ConsoleColor::Red) << FormatString(L"Failed to load the input file: file system error %0.",
 						string(e.code, HexadecimalBase, 4)) << TextColorDefault() << LineFeed();
 				}
 				return 1;
@@ -142,13 +143,13 @@ int Main(void)
 				int x, y, length, ofs;
 				EGSL::LocateErrorPosition(chars, e, exdesc, line, x, y, ofs, length);
 				if (!state.silent) {
-					console << TextColor(Console::ColorRed) << L"Failed" << TextColorDefault() << LineFeed();
-					console << TextColor(Console::ColorRed) << FormatString(L"Compilation error: #%0 - %1 at (%2, %3).",
+					console << TextColor(ConsoleColor::Red) << L"Failed" << TextColorDefault() << LineFeed();
+					console << TextColor(ConsoleColor::Red) << FormatString(L"Compilation error: #%0 - %1 at (%2, %3).",
 						string(uint(EGSL::CompilationError::InvalidToken), HexadecimalBase, 4),
 						EGSL::DescriptionForError(EGSL::CompilationError::InvalidToken), y + 1, x + 1) << TextColorDefault() << LineFeed();
-					if (exdesc.Length()) console << TextColor(Console::ColorRed) << exdesc << L"." << TextColorDefault() << LineFeed() << LineFeed();
+					if (exdesc.Length()) console << TextColor(ConsoleColor::Red) << exdesc << L"." << TextColorDefault() << LineFeed() << LineFeed();
 					console << line << LineFeed();
-					console << string(L' ', ofs) << TextColor(Console::ColorRed) << L"^" << string(L'~', length - 1) << TextColorDefault() << LineFeed();
+					console << string(L' ', ofs) << TextColor(ConsoleColor::Red) << L"^" << string(L'~', length - 1) << TextColorDefault() << LineFeed();
 				}
 				return 1;
 			}
@@ -161,13 +162,13 @@ int Main(void)
 				int x, y, length, ofs;
 				EGSL::LocateErrorPosition(chars, e, exdesc, line, x, y, ofs, length);
 				if (!state.silent) {
-					console << TextColor(Console::ColorRed) << L"Failed" << TextColorDefault() << LineFeed();
-					console << TextColor(Console::ColorRed) << FormatString(L"Compilation error: #%0 - %1 at (%2, %3).",
+					console << TextColor(ConsoleColor::Red) << L"Failed" << TextColorDefault() << LineFeed();
+					console << TextColor(ConsoleColor::Red) << FormatString(L"Compilation error: #%0 - %1 at (%2, %3).",
 						string(uint(EGSL::CompilationError::InvalidToken), HexadecimalBase, 4),
 						EGSL::DescriptionForError(EGSL::CompilationError::InvalidToken), y + 1, x + 1) << TextColorDefault() << LineFeed();
-					if (exdesc.Length()) console << TextColor(Console::ColorRed) << exdesc << L"." << TextColorDefault() << LineFeed() << LineFeed();
+					if (exdesc.Length()) console << TextColor(ConsoleColor::Red) << exdesc << L"." << TextColorDefault() << LineFeed() << LineFeed();
 					console << line << LineFeed();
-					console << string(L' ', ofs) << TextColor(Console::ColorRed) << L"^" << string(L'~', length - 1) << TextColorDefault() << LineFeed();
+					console << string(L' ', ofs) << TextColor(ConsoleColor::Red) << L"^" << string(L'~', length - 1) << TextColorDefault() << LineFeed();
 				}
 				return 1;
 			} catch (EGSL::CompilationException & e) {
@@ -175,22 +176,22 @@ int Main(void)
 				int x, y, length, ofs;
 				EGSL::LocateErrorPosition(chars, *text, e, exdesc, line, x, y, ofs, length);
 				if (!state.silent) {
-					console << TextColor(Console::ColorRed) << L"Failed" << TextColorDefault() << LineFeed();
-					console << TextColor(Console::ColorRed) << FormatString(L"Compilation error: #%0 - %1 at (%2, %3).",
+					console << TextColor(ConsoleColor::Red) << L"Failed" << TextColorDefault() << LineFeed();
+					console << TextColor(ConsoleColor::Red) << FormatString(L"Compilation error: #%0 - %1 at (%2, %3).",
 						string(uint(e.Error), HexadecimalBase, 4), EGSL::DescriptionForError(e.Error), y + 1, x + 1) << TextColorDefault() << LineFeed();
-					if (exdesc.Length()) console << TextColor(Console::ColorRed) << exdesc << L"." << TextColorDefault() << LineFeed() << LineFeed();
+					if (exdesc.Length()) console << TextColor(ConsoleColor::Red) << exdesc << L"." << TextColorDefault() << LineFeed() << LineFeed();
 					console << line << LineFeed();
-					console << string(L' ', ofs) << TextColor(Console::ColorRed) << L"^" << string(L'~', length - 1) << TextColorDefault() << LineFeed();
+					console << string(L' ', ofs) << TextColor(ConsoleColor::Red) << L"^" << string(L'~', length - 1) << TextColorDefault() << LineFeed();
 				}
 				return 1;
 			}
 			if (!state.silent) {
-				if (context.hints.Length()) console << TextColor(Console::ColorYellow) << L"Succeed" << TextColorDefault() << LineFeed();
-				else console << TextColor(Console::ColorGreen) << L"Succeed" << TextColorDefault() << LineFeed();
+				if (context.hints.Length()) console << TextColor(ConsoleColor::Yellow) << L"Succeed" << TextColorDefault() << LineFeed();
+				else console << TextColor(ConsoleColor::Green) << L"Succeed" << TextColorDefault() << LineFeed();
 			}
 			for (auto & h : context.hints) {
 				if (!state.silent && !state.supress_warnings) {
-					console << TextColor(Console::ColorYellow) << L"Warning: " << TextColorDefault() << h << L"." << LineFeed();
+					console << TextColor(ConsoleColor::Yellow) << L"Warning: " << TextColorDefault() << h << L"." << LineFeed();
 				}
 			}
 			if (context.hints.Length() && state.warnings_as_errors) return 1;
@@ -203,16 +204,16 @@ int Main(void)
 					shader.CompiledBlob = EGSL::CompileHLSL(code.ToString(), shader.TranslateName, shader.Class, error_log);
 					if (shader.CompiledBlob) {
 						if (!state.silent && !state.supress_warnings) {
-							console.SetTextColor(Console::ColorYellow);
+							console.SetTextColor(ConsoleColor::Yellow);
 							console.Write(error_log.ToString());
-							console.SetTextColor(Console::ColorDefault);
+							console.SetTextColor(ConsoleColor::Default);
 						}
 						if (state.warnings_as_errors) for (int i = 0; i < error_log.Length(); i++) if (error_log[i] > 32) return 1;
 					} else {
 						if (!state.silent) {
-							console.SetTextColor(Console::ColorRed);
+							console.SetTextColor(ConsoleColor::Red);
 							console.Write(error_log.ToString());
-							console.SetTextColor(Console::ColorDefault);
+							console.SetTextColor(ConsoleColor::Default);
 						}
 						if (state.output_form != EGSL::OutputForm::Source) return 1;
 					}
@@ -255,14 +256,14 @@ int Main(void)
 					auto status = EGSL::CompileMSL(code, L"", error_log);
 					if (status) {
 						if (!state.silent && !state.supress_warnings) {
-							console.SetTextColor(Console::ColorYellow);
+							console.SetTextColor(ConsoleColor::Yellow);
 							console.Write(error_log.ToString());
-							console.SetTextColor(Console::ColorDefault);
+							console.SetTextColor(ConsoleColor::Default);
 						}
 					} else if (!state.silent) {
-						console.SetTextColor(Console::ColorRed);
+						console.SetTextColor(ConsoleColor::Red);
 						console.Write(error_log.ToString());
-						console.SetTextColor(Console::ColorDefault);
+						console.SetTextColor(ConsoleColor::Default);
 					}
 					FileStream stream(state.output + L".metal", AccessWrite, CreateAlways);
 					TextWriter writer(&stream, Encoding::ANSI);
@@ -273,21 +274,21 @@ int Main(void)
 				auto status = EGSL::CompileMSL(code, state.output + L".egso", error_log);
 				if (status) {
 					if (!state.silent && !state.supress_warnings) {
-						console.SetTextColor(Console::ColorYellow);
+						console.SetTextColor(ConsoleColor::Yellow);
 						console.Write(error_log.ToString());
-						console.SetTextColor(Console::ColorDefault);
+						console.SetTextColor(ConsoleColor::Default);
 					}
 					if (state.warnings_as_errors) for (int i = 0; i < error_log.Length(); i++) if (error_log[i] > 32) return 1;
 				} else {
 					if (!state.silent) {
-						console.SetTextColor(Console::ColorRed);
+						console.SetTextColor(ConsoleColor::Red);
 						console.Write(error_log.ToString());
-						console.SetTextColor(Console::ColorDefault);
+						console.SetTextColor(ConsoleColor::Default);
 					}
 					return 1;
 				}
 			} else {
-				if (!state.silent) console << TextColor(Console::ColorRed) << L"Internal error: unknown target interface." << TextColorDefault() << LineFeed();
+				if (!state.silent) console << TextColor(ConsoleColor::Red) << L"Internal error: unknown target interface." << TextColorDefault() << LineFeed();
 				return 1;
 			}
 		} else if (!state.silent) {
@@ -309,14 +310,14 @@ int Main(void)
 		}
 	} catch (Exception & e) {
 		if (!state.silent) {
-			console << TextColor(Console::ColorRed) << L"Failed" << TextColorDefault() << LineFeed();
-			console << TextColor(Console::ColorRed) << FormatString(L"Shader compiler failed: %0.", e.ToString()) << TextColorDefault() << LineFeed();
+			console << TextColor(ConsoleColor::Red) << L"Failed" << TextColorDefault() << LineFeed();
+			console << TextColor(ConsoleColor::Red) << FormatString(L"Shader compiler failed: %0.", e.ToString()) << TextColorDefault() << LineFeed();
 		}
 		return 1;
 	} catch (...) {
 		if (!state.silent) {
-			console << TextColor(Console::ColorRed) << L"Failed" << TextColorDefault() << LineFeed();
-			console << TextColor(Console::ColorRed) << L"Shader compiler failed: Unknown exception." << TextColorDefault() << LineFeed();
+			console << TextColor(ConsoleColor::Red) << L"Failed" << TextColorDefault() << LineFeed();
+			console << TextColor(ConsoleColor::Red) << L"Shader compiler failed: Unknown exception." << TextColorDefault() << LineFeed();
 		}
 		return 1;
 	}
