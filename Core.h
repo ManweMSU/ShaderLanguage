@@ -6,7 +6,7 @@ namespace Engine
 {
 	namespace EGSL
 	{
-		enum class OutputForm { Source, Library };
+		enum class OutputForm { Unknown, Source, Library, Universal };
 		enum class OutputTarget { Unknown, Direct3D11, Metal };
 
 		enum class CompilationError : uint32 {

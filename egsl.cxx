@@ -2,8 +2,7 @@
 
 #include "Core.h"
 #include "Parser.h"
-#include "CompileDX.h"
-#include "CompileMetal.h"
+#include "Output.h"
 
 using namespace Engine;
 using namespace Engine::Streaming;
@@ -81,6 +80,8 @@ bool ParseCommandLine(Console & console)
 						console << TextColor(ConsoleColor::Yellow) << L"Invalid command line: argument expected." << TextColorDefault() << LineFeed();
 						return false;
 					}
+				} else if (arg == L'u') {
+					state.output_form = EGSL::OutputForm::Universal;
 				} else if (arg == L'w') {
 					state.supress_warnings = true;
 				} else {
@@ -116,7 +117,7 @@ int Main(void)
 				state.output = IO::Path::GetDirectory(state.output) + L"/" + IO::Path::GetFileNameWithoutExtension(state.output);
 				state.output = IO::ExpandPath(state.output);
 			}
-			string chars;
+			string code;
 			try {
 				FileStream input_stream(state.input, AccessRead, OpenExisting);
 				TextReader reader(&input_stream);
@@ -126,7 +127,7 @@ int Main(void)
 					if (line.Length() > 1 && line[0] == L'#' && line[1] == L'#') buffer << L"\n";
 					else buffer << line << L"\n";
 				}
-				chars = buffer.ToString();
+				code = buffer.ToString();
 			} catch (IO::FileAccessException & e) {
 				if (!state.silent) {
 					console << TextColor(ConsoleColor::Red) << L"Failed" << TextColorDefault() << LineFeed();
@@ -135,162 +136,7 @@ int Main(void)
 				}
 				return 1;
 			}
-			SafePointer< Array<Syntax::Token> > text;
-			try {
-				text = EGSL::ParseCode(chars);
-			} catch (Syntax::ParserSpellingException & e) {
-				string line, exdesc;
-				int x, y, length, ofs;
-				EGSL::LocateErrorPosition(chars, e, exdesc, line, x, y, ofs, length);
-				if (!state.silent) {
-					console << TextColor(ConsoleColor::Red) << L"Failed" << TextColorDefault() << LineFeed();
-					console << TextColor(ConsoleColor::Red) << FormatString(L"Compilation error: #%0 - %1 at (%2, %3).",
-						string(uint(EGSL::CompilationError::InvalidToken), HexadecimalBase, 4),
-						EGSL::DescriptionForError(EGSL::CompilationError::InvalidToken), y + 1, x + 1) << TextColorDefault() << LineFeed();
-					if (exdesc.Length()) console << TextColor(ConsoleColor::Red) << exdesc << L"." << TextColorDefault() << LineFeed() << LineFeed();
-					console << line << LineFeed();
-					console << string(L' ', ofs) << TextColor(ConsoleColor::Red) << L"^" << string(L'~', length - 1) << TextColorDefault() << LineFeed();
-				}
-				return 1;
-			}
-			EGSL::CompilerCommonContext context;
-			EGSL::InitializeContext(context, state.output_target);
-			try {
-				EGSL::TranslateCode(*text, context);
-			} catch (Syntax::ParserSpellingException & e) {
-				string line, exdesc;
-				int x, y, length, ofs;
-				EGSL::LocateErrorPosition(chars, e, exdesc, line, x, y, ofs, length);
-				if (!state.silent) {
-					console << TextColor(ConsoleColor::Red) << L"Failed" << TextColorDefault() << LineFeed();
-					console << TextColor(ConsoleColor::Red) << FormatString(L"Compilation error: #%0 - %1 at (%2, %3).",
-						string(uint(EGSL::CompilationError::InvalidToken), HexadecimalBase, 4),
-						EGSL::DescriptionForError(EGSL::CompilationError::InvalidToken), y + 1, x + 1) << TextColorDefault() << LineFeed();
-					if (exdesc.Length()) console << TextColor(ConsoleColor::Red) << exdesc << L"." << TextColorDefault() << LineFeed() << LineFeed();
-					console << line << LineFeed();
-					console << string(L' ', ofs) << TextColor(ConsoleColor::Red) << L"^" << string(L'~', length - 1) << TextColorDefault() << LineFeed();
-				}
-				return 1;
-			} catch (EGSL::CompilationException & e) {
-				string line, exdesc;
-				int x, y, length, ofs;
-				EGSL::LocateErrorPosition(chars, *text, e, exdesc, line, x, y, ofs, length);
-				if (!state.silent) {
-					console << TextColor(ConsoleColor::Red) << L"Failed" << TextColorDefault() << LineFeed();
-					console << TextColor(ConsoleColor::Red) << FormatString(L"Compilation error: #%0 - %1 at (%2, %3).",
-						string(uint(e.Error), HexadecimalBase, 4), EGSL::DescriptionForError(e.Error), y + 1, x + 1) << TextColorDefault() << LineFeed();
-					if (exdesc.Length()) console << TextColor(ConsoleColor::Red) << exdesc << L"." << TextColorDefault() << LineFeed() << LineFeed();
-					console << line << LineFeed();
-					console << string(L' ', ofs) << TextColor(ConsoleColor::Red) << L"^" << string(L'~', length - 1) << TextColorDefault() << LineFeed();
-				}
-				return 1;
-			}
-			if (!state.silent) {
-				if (context.hints.Length()) console << TextColor(ConsoleColor::Yellow) << L"Succeed" << TextColorDefault() << LineFeed();
-				else console << TextColor(ConsoleColor::Green) << L"Succeed" << TextColorDefault() << LineFeed();
-			}
-			for (auto & h : context.hints) {
-				if (!state.silent && !state.supress_warnings) {
-					console << TextColor(ConsoleColor::Yellow) << L"Warning: " << TextColorDefault() << h << L"." << LineFeed();
-				}
-			}
-			if (context.hints.Length() && state.warnings_as_errors) return 1;
-			if (state.output_target == EGSL::OutputTarget::Direct3D11) {
-				for (auto & shader : context.Shaders) {
-					DynamicString code;
-					for (auto & str : context.StructureTypes) code << EGSL::MakeHlslCodeForStructure(&str);
-					code << shader.Code;
-					DynamicString error_log;
-					shader.CompiledBlob = EGSL::CompileHLSL(code.ToString(), shader.TranslateName, shader.Class, error_log);
-					if (shader.CompiledBlob) {
-						if (!state.silent && !state.supress_warnings) {
-							console.SetTextColor(ConsoleColor::Yellow);
-							console.Write(error_log.ToString());
-							console.SetTextColor(ConsoleColor::Default);
-						}
-						if (state.warnings_as_errors) for (int i = 0; i < error_log.Length(); i++) if (error_log[i] > 32) return 1;
-					} else {
-						if (!state.silent) {
-							console.SetTextColor(ConsoleColor::Red);
-							console.Write(error_log.ToString());
-							console.SetTextColor(ConsoleColor::Default);
-						}
-						if (state.output_form != EGSL::OutputForm::Source) return 1;
-					}
-					if (state.output_form == EGSL::OutputForm::Source) {
-						FileStream stream(state.output + L"_" + shader.Name + L".hlsl", AccessWrite, CreateAlways);
-						TextWriter writer(&stream, Encoding::ANSI);
-						writer.Write(code);
-					}
-				}
-				if (state.output_form == EGSL::OutputForm::Source) return 0;
-				SafePointer<MemoryStream> output_raw = new MemoryStream(0x10000);
-				SafePointer<Storage::NewArchive> archive = Storage::CreateArchive(output_raw, context.Shaders.Length(), Storage::NewArchiveFlags::UseFormat32);
-				Storage::ArchiveFile file = 0;
-				for (auto & shader : context.Shaders) {
-					file++;
-					archive->SetFileName(file, shader.Name);
-					archive->SetFileData(file, shader.CompiledBlob->GetBuffer(), shader.CompiledBlob->Length());
-					if (shader.Class == EGSL::ShaderClass::Vertex) {
-						archive->SetFileCustom(file, 0x01);
-					} else if (shader.Class == EGSL::ShaderClass::Pixel) {
-						archive->SetFileCustom(file, 0x02);
-					}
-				}
-				archive->Finalize();
-				archive.SetReference(0);
-				if (state.output_form == EGSL::OutputForm::Library) {
-					FileStream output(state.output + L".egso", AccessWrite, CreateAlways);
-					output_raw->Seek(0, Begin);
-					output_raw->CopyTo(&output);
-				}
-			} else if (state.output_target == EGSL::OutputTarget::Metal) {
-				DynamicString code;
-				code << L"#include <metal_stdlib>\n";
-				code << L"#include <simd/simd.h>\n\n";
-				code << L"using namespace metal;\n\n";
-				for (auto & str : context.StructureTypes) code << EGSL::MakeMslCodeForStructure(&str);
-				for (auto & shader : context.Shaders) code << shader.Code;
-				if (state.output_form == EGSL::OutputForm::Source) {
-					DynamicString error_log;
-					auto status = EGSL::CompileMSL(code, L"", error_log);
-					if (status) {
-						if (!state.silent && !state.supress_warnings) {
-							console.SetTextColor(ConsoleColor::Yellow);
-							console.Write(error_log.ToString());
-							console.SetTextColor(ConsoleColor::Default);
-						}
-					} else if (!state.silent) {
-						console.SetTextColor(ConsoleColor::Red);
-						console.Write(error_log.ToString());
-						console.SetTextColor(ConsoleColor::Default);
-					}
-					FileStream stream(state.output + L".metal", AccessWrite, CreateAlways);
-					TextWriter writer(&stream, Encoding::ANSI);
-					writer.Write(code);
-					return 0;
-				}
-				DynamicString error_log;
-				auto status = EGSL::CompileMSL(code, state.output + L".egso", error_log);
-				if (status) {
-					if (!state.silent && !state.supress_warnings) {
-						console.SetTextColor(ConsoleColor::Yellow);
-						console.Write(error_log.ToString());
-						console.SetTextColor(ConsoleColor::Default);
-					}
-					if (state.warnings_as_errors) for (int i = 0; i < error_log.Length(); i++) if (error_log[i] > 32) return 1;
-				} else {
-					if (!state.silent) {
-						console.SetTextColor(ConsoleColor::Red);
-						console.Write(error_log.ToString());
-						console.SetTextColor(ConsoleColor::Default);
-					}
-					return 1;
-				}
-			} else {
-				if (!state.silent) console << TextColor(ConsoleColor::Red) << L"Internal error: unknown target interface." << TextColorDefault() << LineFeed();
-				return 1;
-			}
+			if (!EGSL::ProduceOutput(state.silent ? 0 : &console, code, state.output, state.output_form, state.output_target, state.warnings_as_errors, state.supress_warnings)) return 1;			
 		} else if (!state.silent) {
 			console << ENGINE_VI_APPNAME << LineFeed();
 			console << L"Copyright " << string(ENGINE_VI_COPYRIGHT).Replace(L'\xA9', L"(C)") << LineFeed();
@@ -305,6 +151,7 @@ int Main(void)
 			console << L"  :l - build binary shader library file (.egso)," << LineFeed();
 			console << L"  :o - specify the output library file (as the next argument)," << LineFeed();
 			console << L"  :t - specify the target interface implementation (as the next argument)," << LineFeed();
+			console << L"  :u - build universal translated and not compiled bundle (.egsu)," << LineFeed();
 			console << L"  :w - supress warnings." << LineFeed();
 			console << LineFeed();
 		}
