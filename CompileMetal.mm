@@ -46,6 +46,8 @@ namespace Engine
 					cmds << src;
 					cmds << L"-o";
 					cmds << air;
+					cmds << L"-std=macos-metal2.4";
+					cmds << L"--target=air64-apple-macos11.0";
 					SafePointer<Process> process = CreateCommandProcess(L"xcrun", &cmds);
 					if (process) process->Wait();
 					if (!process || process->GetExitCode()) return false;
