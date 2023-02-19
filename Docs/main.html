@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<link rel="stylesheet" href="style.css">
+		<title>Язык EGSL</title>
+	</head>
+	<body>
+		<h1>Общая структура языка</h1>
+		<b>EGSL</b> - <b>Engine Graphics Shader Language</b> - язык программирования шейдеров для Engine Runtime.
+		Динамически транслируется в HLSL, MSL или GLSL и компилируется штатным компилятором в зависимости от платформы.
+		<h2>Типы языка</h2>
+		<h3>Элементарные типы</h3>
+		<table border="1">
+			<tr><td><b>Тип EGSL</b></td><td><b>Тип C++/ERT</b></td><td><b>Описание</b></td></tr>
+			<tr><td>bool</td><td>bool</td><td>Скалярный. Логическая величина.</td></tr>
+			<tr><td>int</td><td>int</td><td>Скалярный. Целочисленная 32-разрядная величина со знаком.</td></tr>
+			<tr><td>uint</td><td>unsigned int</td><td>Скалярный. Целочисленная 32-разрядная величина без знака.</td></tr>
+			<tr><td>float</td><td>float</td><td>Скалярный. 32-разрядная величина с плавающей запятой (IEEE).</td></tr>
+			<tr><td>boolN</td><td>bool[N]</td><td>Векторный. Вектор из N соответствующих величин типа bool. Может быть bool2, bool3 или bool4.</td></tr>
+			<tr><td>intN</td><td>int[N]</td><td>Векторный. Вектор из N соответствующих величин типа int. Может быть int2, int3 или int4.</td></tr>
+			<tr><td>uintN</td><td>unsigned int[N]</td><td>Векторный. Вектор из N соответствующих величин типа uint. Может быть uint2, uint3 или uint4.</td></tr>
+			<tr><td>floatN</td><td>Engine::Math::VectorNf</td><td>Векторный. Вектор из N соответствующих величин типа float. Может быть float2, float3 или float4.</td></tr>
+			<tr><td>boolNxM</td><td>-</td><td>Матричный (N строк и M столбцов).</td></tr>
+			<tr><td>intNxM</td><td>-</td><td>Матричный (N строк и M столбцов).</td></tr>
+			<tr><td>uintNxM</td><td>-</td><td>Матричный (N строк и M столбцов).</td></tr>
+			<tr><td>floatNxM</td><td>Engine::Math::Matrix4x4f *</td><td>Матричный (N строк и M столбцов).</td></tr>
+		</table>
+		* только при M = N = 4, иначе возможна несовместимость размещения в памяти.
+		<h3>Пользовательские типы</h3>
+		Язык допускает объявление структур. Объявление структуры имеет следующий синтаксис:
+		<p>
+			'struct' STRUCT_NAME '{' { FIELD_DECL ';' } '}'
+		</p>
+		STRUCT_NAME - идентификатор - имя нового типа, FIELD_DECL - декларация поля, имеет следующий синтаксис:
+		<p>
+			[ INTERPOLATION_MODE ] TYPE FIELD_NAME { ',' FIELD_NAME }
+		</p>
+		или
+		<p>
+			[ INTERPOLATION_MODE ] TYPE FIELD_NAME '[' COUNT ']'
+		</p>
+		где INTERPOLATION_MODE = linear, nointerpolation или noperspective - режим интерполяции,
+		TYPE - тип поля, допускаются только элементарные типы,
+		FIELD_NAME - идентификатор - имя поля, COUNT - объём массива для полей - статических массивов.
+		<h3>Ресурсные типы</h3>
+		Язык позволяет использовать объекты такого типа, но не позволяет их объявлять или изменять.
+		Параметры функций такого типа поступают через привязки ресурсов во входных параметрах функций.
+		<table border="1">
+			<tr><td><b>Тип EGSL</b></td><td><b>Тип C++/ERT</b></td><td><b>Описание</b></td></tr>
+			<tr><td>sampler</td><td>Engine::Graphics::ISamplerState</td><td>Функция выборки.</td></tr>
+			<tr><td>array&lt;T&gt;</td><td>Engine::Graphics::IBuffer</td><td>Массив элементарных или пользовательских элементов типа T.</td></tr>
+			<tr><td>texture&lt;N, T&gt;</td><td>Engine::Graphics::ITexture</td><td>Текстура. N = 1, 2, cube или 3, T - скалярный или векторный элементарный тип, целочисленный или вещественный.</td></tr>
+			<tr><td>texture&lt;N&gt;</td><td>Engine::Graphics::ITexture</td><td>Эквивалент texture&lt;N, float4&gt;</td></tr>
+			<tr><td>texture&lt;T&gt;</td><td>Engine::Graphics::ITexture</td><td>Эквивалент texture&lt;2, T&gt;</td></tr>
+			<tr><td>texture</td><td>Engine::Graphics::ITexture</td><td>Эквивалент texture&lt;2, float4&gt;</td></tr>
+			<tr><td>texture array&lt;N, T&gt;</td><td>Engine::Graphics::ITexture</td><td>Массив текстур. N = 1, 2 или cube, T - скалярный или векторный элементарный тип, целочисленный или вещественный.</td></tr>
+			<tr><td>texture array&lt;N&gt;</td><td>Engine::Graphics::ITexture</td><td>Эквивалент texture array&lt;N, float4&gt;</td></tr>
+			<tr><td>texture array&lt;T&gt;</td><td>Engine::Graphics::ITexture</td><td>Эквивалент texture array&lt;2, T&gt;</td></tr>
+			<tr><td>texture array</td><td>Engine::Graphics::ITexture</td><td>Эквивалент texture array&lt;2, float4&gt;</td></tr>
+		</table>
+		<h2>Функции языка</h2>
+		Объявление функции имеет следующий синтаксис:
+		<p>
+			SHADER_TYPE SHADER_NAME '(' SHADER_ARGUMENT { ',' SHADER_ARGUMENT } ')'
+			'{'
+				{ STATEMENT }
+			'}'
+		</p>
+		где SHADER_TYPE = pixel или vertex, SHADER_NAME - идентификатор - имя функции, STATEMENT - оператор языка,
+		SHADER_ARGUMENT - описание параметра шейдера. SHADER_ARGUMENT имеет следующий синтаксис:
+		<p>
+			DIRECTION TYPE IDENTIFIER [ ':' SEMANTIC [ '[' INDEX ']' ] ]
+		</p>
+		где DIRECTION = in или out - определяет является ли аргумент входным параметром или возвращаемым значением,
+		TYPE - тип аргумента, IDENTIFIER - идентификатор аргумента, SEMANTIC - привязка аргумента, INDEX - индекс привязки.
+		Не все комбинации SHADER_TYPE, DIRECTION, TYPE и SEMANTIC являются допустимыми.
+		<h2>Смотрите также</h2>
+		<p><a href="statements.html">Операторы языка</a></p>
+		<p><a href="functions.html">Встроенные функции языка</a></p>
+		<p><a href="semantics.html">Привязки языка</a></p>
+	</body>
+</html>
